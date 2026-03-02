@@ -173,6 +173,30 @@ mlir::Value MLIRGen::wireStringPtr(mlir::Location location, llvm::StringRef valu
 // Wire struct/enum declaration
 // ============================================================================
 
+void MLIRGen::preRegisterWireStructType(const ast::WireDecl &decl) {
+  if (decl.kind != ast::WireDeclKind::Struct)
+    return;
+
+  const auto &declName = decl.name;
+  if (structTypes.find(declName) != structTypes.end())
+    return; // already registered
+
+  StructTypeInfo info;
+  info.name = declName;
+  llvm::SmallVector<mlir::Type, 8> fieldTypes;
+  unsigned fieldIdx = 0;
+  for (const auto &field : decl.fields) {
+    auto mlirTy = wireTypeToMLIR(builder, field.ty);
+    fieldTypes.push_back(mlirTy);
+    info.fields.push_back({field.name, mlirTy, mlirTy, fieldIdx, ""});
+    ++fieldIdx;
+  }
+  info.mlirType = mlir::LLVM::LLVMStructType::getIdentified(&context, declName);
+  if (!info.mlirType.isInitialized())
+    (void)info.mlirType.setBody(fieldTypes, /*isPacked=*/false);
+  structTypes[declName] = info;
+}
+
 void MLIRGen::generateWireDecl(const ast::WireDecl &decl) {
   auto location = currentLoc;
   auto ptrType = mlir::LLVM::LLVMPointerType::get(&context);
@@ -281,21 +305,32 @@ void MLIRGen::generateWireDecl(const ast::WireDecl &decl) {
 
   // ── Register the wire struct as a regular struct type ─────────────
   // This allows the rest of the compiler to work with the struct.
+  // Skip if already registered by preRegisterWireStructType (pass 1b2).
   const auto &declName = decl.name;
-  StructTypeInfo info;
-  info.name = declName;
   llvm::SmallVector<mlir::Type, 8> fieldTypes;
-  unsigned fieldIdx = 0;
   for (const auto &field : decl.fields) {
-    auto mlirTy = wireTypeToMLIR(builder, field.ty);
-    info.fields.push_back({field.name, mlirTy, mlirTy, fieldIdx, ""});
-    fieldTypes.push_back(mlirTy);
-    ++fieldIdx;
+    fieldTypes.push_back(wireTypeToMLIR(builder, field.ty));
   }
-  info.mlirType = mlir::LLVM::LLVMStructType::getIdentified(&context, declName);
-  if (!info.mlirType.isInitialized())
-    (void)info.mlirType.setBody(fieldTypes, /*isPacked=*/false);
-  structTypes[declName] = info;
+  if (structTypes.find(declName) == structTypes.end()) {
+    StructTypeInfo info;
+    info.name = declName;
+    unsigned fieldIdx = 0;
+    for (const auto &field : decl.fields) {
+      auto mlirTy = fieldTypes[fieldIdx];
+      info.fields.push_back({field.name, mlirTy, mlirTy, fieldIdx, ""});
+      ++fieldIdx;
+    }
+    info.mlirType = mlir::LLVM::LLVMStructType::getIdentified(&context, declName);
+    if (!info.mlirType.isInitialized())
+      (void)info.mlirType.setBody(fieldTypes, /*isPacked=*/false);
+    structTypes[declName] = info;
+  }
+
+  // Track this struct as wire-typed (for actor codegen to detect wire messages)
+  wireStructNames[declName] = {
+      mangleName(currentModulePath, declName, "encode"),
+      mangleName(currentModulePath, declName, "decode")};
+
 
   // ── Generate Foo_encode function ─────────────────────────────────
   // Signature: Foo_encode(field1, field2, ...) -> !llvm.ptr
@@ -321,6 +356,16 @@ void MLIRGen::generateWireDecl(const ast::WireDecl &decl) {
                                         mlir::SymbolRefAttr::get(&context, "hew_wire_buf_new"),
                                         mlir::ValueRange{})
             .getResult();
+
+    // If schema has a version, encode it as field 0 (reserved for version tag)
+    if (decl.version.has_value()) {
+      auto tagZero = createIntConstant(builder, location, i32Type, 0);
+      auto versionVal = createIntConstant(builder, location, i64Type, *decl.version);
+      builder.create<hew::RuntimeCallOp>(
+          location, mlir::TypeRange{i32Type},
+          mlir::SymbolRefAttr::get(&context, "hew_wire_encode_field_varint"),
+          mlir::ValueRange{bufPtr, tagZero, versionVal});
+    }
 
     // Encode each field
     unsigned encIdx = 0;
@@ -383,7 +428,7 @@ void MLIRGen::generateWireDecl(const ast::WireDecl &decl) {
   // Uses TLV dispatch loop for forward compatibility — unknown fields are
   // silently skipped, fields can appear in any order.
   {
-    auto structType = info.mlirType;
+    auto structType = structTypes.at(declName).mlirType;
     auto decodeFnType = mlir::FunctionType::get(&context, {ptrType, i64Type}, {structType});
     std::string decodeName = declName + "_decode";
 
@@ -499,11 +544,11 @@ void MLIRGen::generateWireDecl(const ast::WireDecl &decl) {
         auto rawI64 = builder.create<mlir::LLVM::LoadOp>(location, i64Type, scratchI64);
         decoded = builder.create<mlir::arith::BitcastOp>(location, builder.getF64Type(), rawI64);
       } else if (jkind == WireJsonKind::String) {
-        builder.create<hew::RuntimeCallOp>(
-            location, mlir::TypeRange{i32Type},
-            mlir::SymbolRefAttr::get(&context, "hew_wire_decode_bytes"),
-            mlir::ValueRange{bufPtr, scratchPtr, scratchLen});
-        decoded = builder.create<mlir::LLVM::LoadOp>(location, ptrType, scratchPtr);
+        // Decode as null-terminated C string (copies data + appends '\0')
+        decoded = builder.create<hew::RuntimeCallOp>(
+            location, mlir::TypeRange{ptrType},
+            mlir::SymbolRefAttr::get(&context, "hew_wire_decode_string"),
+            mlir::ValueRange{bufPtr}).getResult();
       } else {
         builder.create<hew::RuntimeCallOp>(
             location, mlir::TypeRange{i32Type},
@@ -904,13 +949,89 @@ void MLIRGen::generateWireMethodWrappers(const ast::WireDecl &decl) {
     builder.restoreInsertionPoint(savedIP);
   };
 
-  // Instance method wrappers: struct -> result
-  generateInstanceWrapper("encode", declName + "_encode", ptrType);
+  // ── encode wrapper: struct -> bytes (HewVec*) ──────────────────────
+  // Extracts fields, calls Foo_encode → HewWireBuf*, then converts to bytes.
+  {
+    std::string mangledName = mangleName(currentModulePath, declName, "encode");
+    auto savedIP = builder.saveInsertionPoint();
+    builder.setInsertionPointToEnd(module.getBody());
+    if (auto existing = module.lookupSymbol<mlir::func::FuncOp>(mangledName))
+      existing.erase();
+
+    auto wrapperType = mlir::FunctionType::get(&context, {structType}, {ptrType});
+    auto wrapperFn = builder.create<mlir::func::FuncOp>(location, mangledName, wrapperType);
+    auto *entry = wrapperFn.addEntryBlock();
+    builder.setInsertionPointToStart(entry);
+
+    // Extract fields and call Foo_encode → HewWireBuf*
+    mlir::Value selfStruct = entry->getArgument(0);
+    llvm::SmallVector<mlir::Value, 8> fieldArgs;
+    for (unsigned i = 0; i < fieldTypes.size(); ++i)
+      fieldArgs.push_back(
+          builder.create<mlir::LLVM::ExtractValueOp>(location, selfStruct, i));
+    auto callee = module.lookupSymbol<mlir::func::FuncOp>(declName + "_encode");
+    auto wireBuf = builder.create<mlir::func::CallOp>(location, callee, fieldArgs)
+                       .getResult(0);
+
+    // Convert HewWireBuf* → bytes (HewVec*)
+    auto bytesVec = builder.create<hew::RuntimeCallOp>(
+        location, mlir::TypeRange{ptrType},
+        mlir::SymbolRefAttr::get(&context, "hew_wire_buf_to_bytes"),
+        mlir::ValueRange{wireBuf}).getResult();
+
+    builder.create<mlir::func::ReturnOp>(location, mlir::ValueRange{bytesVec});
+    builder.restoreInsertionPoint(savedIP);
+  }
+
+  // ── decode wrapper: bytes (HewVec*) -> struct ─────────────────────
+  // Converts bytes to HewWireBuf*, extracts data/len, calls Foo_decode,
+  // destroys the temp buf.
+  {
+    std::string mangledName = mangleName(currentModulePath, declName, "decode");
+    auto savedIP = builder.saveInsertionPoint();
+    builder.setInsertionPointToEnd(module.getBody());
+    if (auto existing = module.lookupSymbol<mlir::func::FuncOp>(mangledName))
+      existing.erase();
+
+    auto wrapperType = mlir::FunctionType::get(&context, {ptrType}, {structType});
+    auto wrapperFn = builder.create<mlir::func::FuncOp>(location, mangledName, wrapperType);
+    auto *entry = wrapperFn.addEntryBlock();
+    builder.setInsertionPointToStart(entry);
+
+    mlir::Value bytesVec = entry->getArgument(0);
+
+    // Convert bytes → HewWireBuf*
+    auto wireBuf = builder.create<hew::RuntimeCallOp>(
+        location, mlir::TypeRange{ptrType},
+        mlir::SymbolRefAttr::get(&context, "hew_wire_bytes_to_buf"),
+        mlir::ValueRange{bytesVec}).getResult();
+
+    // Extract data pointer and length from the wire buf
+    auto dataPtr = builder.create<hew::RuntimeCallOp>(
+        location, mlir::TypeRange{ptrType},
+        mlir::SymbolRefAttr::get(&context, "hew_wire_buf_data"),
+        mlir::ValueRange{wireBuf}).getResult();
+    auto bufLen = builder.create<hew::RuntimeCallOp>(
+        location, mlir::TypeRange{i64Type},
+        mlir::SymbolRefAttr::get(&context, "hew_wire_buf_len"),
+        mlir::ValueRange{wireBuf}).getResult();
+
+    // Call Foo_decode(ptr, len) → struct
+    // Note: the wire buf is intentionally NOT destroyed here because decoded
+    // string fields may contain zero-copy pointers into the buffer data.
+    auto decodeCallee = module.lookupSymbol<mlir::func::FuncOp>(declName + "_decode");
+    auto decoded = builder.create<mlir::func::CallOp>(
+        location, decodeCallee, mlir::ValueRange{dataPtr, bufLen}).getResult(0);
+
+    builder.create<mlir::func::ReturnOp>(location, mlir::ValueRange{decoded});
+    builder.restoreInsertionPoint(savedIP);
+  }
+
+  // Instance method wrappers: struct -> result (to_json, to_yaml unchanged)
   generateInstanceWrapper("to_json", declName + "_to_json", ptrType);
   generateInstanceWrapper("to_yaml", declName + "_to_yaml", ptrType);
 
-  // Static method wrappers: args -> struct
-  generateStaticWrapper("decode", declName + "_decode", {ptrType, i64Type}, structType);
+  // Static method wrappers: args -> struct (from_json, from_yaml unchanged)
   generateStaticWrapper("from_json", declName + "_from_json", {ptrType}, structType);
   generateStaticWrapper("from_yaml", declName + "_from_yaml", {ptrType}, structType);
 }
