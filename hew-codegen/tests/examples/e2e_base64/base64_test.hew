@@ -2,9 +2,7 @@ import std::encoding::base64;
 
 fn main() {
     // Encode "Hi"
-    let data: bytes = bytes::new();
-    data.push(72); // H
-    data.push(105); // i
+    let data = b"Hi";
     let s = base64.encode(data);
     println(s);
 
@@ -19,13 +17,10 @@ fn main() {
     println(u);
 
     // Empty encode
-    let empty: bytes = bytes::new();
+    let empty = b"";
     println(base64.encode(empty));
 
     // Known value: "\x00\x00\x00" -> "AAAA"
-    let zeros: bytes = bytes::new();
-    zeros.push(0);
-    zeros.push(0);
-    zeros.push(0);
+    let zeros = bytes [0, 0, 0];
     println(base64.encode(zeros));
 }
