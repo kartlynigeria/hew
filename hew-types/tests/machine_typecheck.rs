@@ -23,10 +23,10 @@ fn make_machine(
     MachineDecl {
         visibility: Visibility::Pub,
         name: name.to_string(),
+        has_default: false,
         states,
         events,
         transitions,
-        has_default: false,
     }
 }
 

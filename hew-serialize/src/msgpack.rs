@@ -157,7 +157,7 @@ mod tests {
     use super::*;
     use hew_parser::ast::{
         Block, Expr, FnDecl, IntRadix, Item, Literal, MachineDecl, MachineEvent, MachineState,
-        MachineTransition, Program, Stmt, TypeExpr, Visibility,
+        MachineTransition, Program, Stmt, Visibility,
     };
 
     /// Round-trip: serialize → deserialize should produce an identical AST.
@@ -284,6 +284,7 @@ mod tests {
                 Item::Machine(MachineDecl {
                     visibility: Visibility::Pub,
                     name: "TrafficLight".into(),
+                    has_default: false,
                     states: vec![
                         MachineState {
                             name: "Red".into(),
@@ -326,7 +327,6 @@ mod tests {
                             15..25,
                         ),
                     }],
-                    has_default: false,
                 }),
                 0..100,
             )],
