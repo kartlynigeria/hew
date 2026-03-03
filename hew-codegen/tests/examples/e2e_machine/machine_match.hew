@@ -10,16 +10,16 @@ machine Door {
     event Push;
     event Pull;
 
-    on Unlock: Locked -> Unlocked { Unlocked }
-    on Lock: Unlocked -> Locked { Locked }
-    on Push: Unlocked -> Open { Open }
-    on Pull: Open -> Unlocked { Unlocked }
+    on Unlock: Locked -> Unlocked;
+    on Lock: Unlocked -> Locked;
+    on Push: Unlocked -> Open;
+    on Pull: Open -> Unlocked;
 
     // Wildcard self-transitions for invalid actions
-    on Lock: _ -> _ { self }
-    on Unlock: _ -> _ { self }
-    on Push: _ -> _ { self }
-    on Pull: _ -> _ { self }
+    on Lock: _ -> _ { state }
+    on Unlock: _ -> _ { state }
+    on Push: _ -> _ { state }
+    on Pull: _ -> _ { state }
 }
 
 fn describe(d: Door) -> String {

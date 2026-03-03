@@ -606,6 +606,7 @@ impl<'src> Parser<'src> {
             Token::State => Some("state"),
             Token::Event => Some("event"),
             Token::On => Some("on"),
+            Token::When => Some("when"),
             _ => None,
         }
     }
@@ -1731,6 +1732,7 @@ impl<'src> Parser<'src> {
         let mut states = Vec::new();
         let mut events = Vec::new();
         let mut transitions = Vec::new();
+        let mut has_default = false;
 
         while !self.at_end() && self.peek() != Some(&Token::RightBrace) {
             if self.peek() == Some(&Token::State) {
@@ -1788,15 +1790,81 @@ impl<'src> Parser<'src> {
                 let source_state = self.parse_state_pattern()?;
                 self.expect(&Token::Arrow)?;
                 let target_state = self.parse_state_pattern()?;
-                let body_start = self.peek_span().start;
-                let body_block = self.parse_block()?;
-                let body_end = self.peek_span().start;
+
+                // Optional guard: `when <expr>`
+                let guard = if self.peek() == Some(&Token::When) {
+                    self.advance();
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+
+                // Body is optional for unit target states, and target state
+                // name is inferred for payload states:
+                //   on Event: Source -> Target;                     ← no body
+                //   on Event: Source -> Target { field: expr, ... } ← struct fields, target inferred
+                //   on Event: Source -> Target { expression }       ← explicit body
+                let (body, body_start, body_end) = if self.eat(&Token::Semicolon) {
+                    let span_pos = self.peek_span().start;
+                    let body_expr = Expr::Identifier(target_state.clone());
+                    (body_expr, span_pos, span_pos)
+                } else if target_state != "_" && self.is_struct_init_body() {
+                    // `{ field: expr, ... }` — wrap in TargetState { ... }
+                    let bs = self.peek_span().start;
+                    self.expect(&Token::LeftBrace)?;
+                    let mut fields = Vec::new();
+                    while !self.at_end() && self.peek() != Some(&Token::RightBrace) {
+                        let fname = self.expect_ident()?;
+                        self.expect(&Token::Colon)?;
+                        let fval = self.parse_expr()?;
+                        fields.push((fname, fval));
+                        if !self.eat(&Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect(&Token::RightBrace)?;
+                    let be = self.peek_span().start;
+                    let struct_init = Expr::StructInit {
+                        name: target_state.clone(),
+                        fields,
+                    };
+                    (struct_init, bs, be)
+                } else {
+                    let bs = self.peek_span().start;
+                    let block = self.parse_block()?;
+                    let be = self.peek_span().start;
+                    (Expr::Block(block), bs, be)
+                };
+
                 transitions.push(MachineTransition {
                     event_name,
                     source_state,
                     target_state,
-                    body: (Expr::Block(body_block), body_start..body_end),
+                    guard,
+                    body: (body, body_start..body_end),
                 });
+            } else if self.peek() == Some(&Token::Default) {
+                // `default { self }` — unhandled events stay in current state
+                self.advance();
+                if self.eat(&Token::LeftBrace) {
+                    let mut depth = 1;
+                    while depth > 0 && !self.at_end() {
+                        if self.peek() == Some(&Token::LeftBrace) {
+                            depth += 1;
+                        }
+                        if self.peek() == Some(&Token::RightBrace) {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        self.advance();
+                    }
+                    self.expect(&Token::RightBrace)?;
+                } else {
+                    self.eat(&Token::Semicolon);
+                }
+                has_default = true;
             } else {
                 self.error("expected state, event, or transition in machine body".to_string());
                 self.advance();
@@ -1811,6 +1879,7 @@ impl<'src> Parser<'src> {
             states,
             events,
             transitions,
+            has_default,
         })
     }
 
@@ -1823,6 +1892,24 @@ impl<'src> Parser<'src> {
             }
             _ => self.expect_ident(),
         }
+    }
+
+    /// Check if the next tokens look like a struct init body: `{ ident: expr }`.
+    /// Used to detect `on Event: S -> T { field: expr }` shorthand.
+    fn is_struct_init_body(&self) -> bool {
+        // Peek at `{`, then `ident`, then `:` — if all three, it's struct init
+        if self.peek() != Some(&Token::LeftBrace) {
+            return false;
+        }
+        // Look ahead: tokens[pos+1] should be Identifier, tokens[pos+2] should be Colon
+        let pos = self.pos;
+        if pos + 2 >= self.tokens.len() {
+            return false;
+        }
+        matches!(
+            (&self.tokens[pos + 1].0, &self.tokens[pos + 2].0),
+            (Token::Identifier(_), Token::Colon)
+        )
     }
 
     #[expect(

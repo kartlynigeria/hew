@@ -54,8 +54,8 @@ using namespace mlir;
 static ast::WireDecl wireMetadataToWireDecl(const ast::TypeDecl &td) {
   ast::WireDecl wd;
   wd.visibility = td.visibility;
-  wd.kind = (td.kind == ast::TypeDeclKind::Enum) ? ast::WireDeclKind::Enum
-                                                  : ast::WireDeclKind::Struct;
+  wd.kind =
+      (td.kind == ast::TypeDeclKind::Enum) ? ast::WireDeclKind::Enum : ast::WireDeclKind::Struct;
   wd.name = td.name;
 
   const auto &wm = *td.wire;
@@ -2486,8 +2486,8 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
     mlir::Value result = nullptr;
     for (int i = static_cast<int>(decl.states.size()) - 1; i >= 0; --i) {
       auto symName = getOrCreateGlobalString(decl.states[i].name);
-      auto strVal = builder.create<hew::ConstantOp>(
-          location, hew::StringRefType::get(&context), builder.getStringAttr(symName));
+      auto strVal = builder.create<hew::ConstantOp>(location, hew::StringRefType::get(&context),
+                                                    builder.getStringAttr(symName));
       auto strPtr = builder.create<hew::BitcastOp>(location, ptrType, strVal);
 
       if (result == nullptr) {
@@ -2495,8 +2495,8 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
         result = strPtr;
       } else {
         auto tagVal = createIntConstant(builder, location, builder.getI32Type(), i);
-        auto cond = builder.create<mlir::arith::CmpIOp>(
-            location, mlir::arith::CmpIPredicate::eq, tag, tagVal);
+        auto cond = builder.create<mlir::arith::CmpIOp>(location, mlir::arith::CmpIPredicate::eq,
+                                                        tag, tagVal);
         result = builder.create<mlir::arith::SelectOp>(location, cond, strPtr, result);
       }
     }
@@ -2519,18 +2519,17 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
     auto selfArg = entryBlock->getArgument(0);
     auto eventArg = entryBlock->getArgument(1);
 
-    auto stateTag = builder.create<hew::EnumExtractTagOp>(
-        location, builder.getI32Type(), selfArg);
-    auto eventTag = builder.create<hew::EnumExtractTagOp>(
-        location, builder.getI32Type(), eventArg);
+    auto stateTag = builder.create<hew::EnumExtractTagOp>(location, builder.getI32Type(), selfArg);
+    auto eventTag = builder.create<hew::EnumExtractTagOp>(location, builder.getI32Type(), eventArg);
 
-    // Build a map from (source_state_idx, event_idx) → transition info.
+    // Build a map from (source_state_idx, event_idx) → list of transition info.
     // Wildcard source "_" maps to all states not explicitly covered.
+    // Multiple transitions for the same pair are allowed when guards are present.
     struct TransitionTarget {
       unsigned targetStateIdx;
       const ast::MachineTransition *transition = nullptr;
     };
-    std::map<std::pair<unsigned, unsigned>, TransitionTarget> transitionMap;
+    std::map<std::pair<unsigned, unsigned>, std::vector<TransitionTarget>> transitionMap;
 
     // Build event name → index map
     std::unordered_map<std::string, unsigned> eventNameToIdx;
@@ -2573,7 +2572,7 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
           if (targetIt != stateNameToIdx.end())
             targetIdx = targetIt->second;
         }
-        transitionMap[{sourceIdx, eventIdx}] = {targetIdx, &trans};
+        transitionMap[{sourceIdx, eventIdx}].push_back({targetIdx, &trans});
       }
     }
 
@@ -2583,7 +2582,7 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
         auto key = std::make_pair(si, eventIdx);
         if (transitionMap.find(key) == transitionMap.end()) {
           unsigned finalTarget = (wildcardInfo.first == UINT_MAX) ? si : wildcardInfo.first;
-          transitionMap[key] = {finalTarget, wildcardInfo.second};
+          transitionMap[key].push_back({finalTarget, wildcardInfo.second});
         }
       }
     }
@@ -2591,7 +2590,7 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
     // Helper: check if body expression is just the identifier `self`
     auto isSelfBodyExpr = [](const ast::Expr &expr) -> bool {
       if (auto *ident = std::get_if<ast::ExprIdentifier>(&expr.kind))
-        return ident->name == "self";
+        return ident->name == "state";
       return false;
     };
 
@@ -2603,39 +2602,58 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
     for (auto it = transitionMap.rbegin(); it != transitionMap.rend(); ++it) {
       unsigned sourceIdx = it->first.first;
       unsigned eventIdx = it->first.second;
-      const auto *trans = it->second.transition;
+      const auto &targets = it->second;
 
-      // Build condition: stateTag == sourceIdx && eventTag == eventIdx
+      // Build base condition: stateTag == sourceIdx && eventTag == eventIdx
       auto stateConst = createIntConstant(builder, location, builder.getI32Type(), sourceIdx);
       auto eventConst = createIntConstant(builder, location, builder.getI32Type(), eventIdx);
-      auto stateCmp = builder.create<mlir::arith::CmpIOp>(
-          location, mlir::arith::CmpIPredicate::eq, stateTag, stateConst);
-      auto eventCmp = builder.create<mlir::arith::CmpIOp>(
-          location, mlir::arith::CmpIPredicate::eq, eventTag, eventConst);
-      auto cond = builder.create<mlir::arith::AndIOp>(location, stateCmp, eventCmp);
+      auto stateCmp = builder.create<mlir::arith::CmpIOp>(location, mlir::arith::CmpIPredicate::eq,
+                                                          stateTag, stateConst);
+      auto eventCmp = builder.create<mlir::arith::CmpIOp>(location, mlir::arith::CmpIPredicate::eq,
+                                                          eventTag, eventConst);
+      auto baseCond = builder.create<mlir::arith::AndIOp>(location, stateCmp, eventCmp);
 
-      mlir::Value targetVal;
+      // Process transitions in reverse order so earlier ones take priority
+      for (auto ti = targets.rbegin(); ti != targets.rend(); ++ti) {
+        const auto *trans = ti->transition;
+        auto cond = baseCond;
 
-      if (trans && isSelfBodyExpr(trans->body.value)) {
-        // Self-transition: return selfArg unchanged (preserves all fields)
-        targetVal = selfArg;
-      } else if (trans) {
-        // Evaluate the transition body expression (e.g. Count { n: self.n + 1 })
-        SymbolTableScopeT bodyScope(symbolTable);
-        declareVariable("self", selfArg);
-        currentMachineSourceVariant_ = decl.states[sourceIdx].name;
-        targetVal = generateExpression(trans->body.value);
-        currentMachineSourceVariant_.clear();
-      } else {
-        // Fallback: construct tag-only value
-        targetVal = builder.create<hew::EnumConstructOp>(
-            location, machineType, static_cast<int32_t>(it->second.targetStateIdx),
-            builder.getStringAttr(machineName), mlir::ValueRange{},
-            /*payload_positions=*/nullptr);
+        mlir::Value targetVal;
+
+        if (trans && isSelfBodyExpr(trans->body.value)) {
+          // Self-transition: return selfArg unchanged (preserves all fields)
+          targetVal = selfArg;
+        } else if (trans) {
+          // Evaluate the transition body expression (e.g. Count { n: self.n + 1 })
+          SymbolTableScopeT bodyScope(symbolTable);
+          declareVariable("state", selfArg);
+          declareVariable("event", eventArg);
+          currentMachineSourceVariant_ = decl.states[sourceIdx].name;
+          currentMachineEventVariant_ = trans->event_name;
+          currentMachineEventTypeName_ = machineName + "Event";
+
+          // Evaluate guard if present
+          if (trans->guard) {
+            auto guardVal = generateExpression(trans->guard->value);
+            if (guardVal)
+              cond = builder.create<mlir::arith::AndIOp>(location, cond, guardVal);
+          }
+
+          targetVal = generateExpression(trans->body.value);
+          currentMachineSourceVariant_.clear();
+          currentMachineEventVariant_.clear();
+          currentMachineEventTypeName_.clear();
+        } else {
+          // Fallback: construct tag-only value
+          targetVal = builder.create<hew::EnumConstructOp>(
+              location, machineType, static_cast<int32_t>(ti->targetStateIdx),
+              builder.getStringAttr(machineName), mlir::ValueRange{},
+              /*payload_positions=*/nullptr);
+        }
+
+        if (targetVal)
+          result = builder.create<mlir::arith::SelectOp>(location, cond, targetVal, result);
       }
-
-      if (targetVal)
-        result = builder.create<mlir::arith::SelectOp>(location, cond, targetVal, result);
     }
 
     builder.create<mlir::func::ReturnOp>(location, mlir::ValueRange{result});
