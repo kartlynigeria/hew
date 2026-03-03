@@ -7,7 +7,7 @@
 #   docker run --rm -v "$PWD:/work" ghcr.io/hew-lang/hew build main.hew
 #   docker run --rm -v "$PWD:/work" ghcr.io/hew-lang/hew run main.hew
 
-FROM alpine:3.21 AS fetch
+FROM alpine:3.23 AS fetch
 ARG TARGETARCH
 COPY *.tar.gz /tmp/
 RUN set -e; \
@@ -19,7 +19,7 @@ RUN set -e; \
     tar -xzf /tmp/hew-v*-linux-${ARCH}.tar.gz -C /tmp && \
     mv /tmp/hew-v*-linux-${ARCH} /tmp/hew
 
-FROM alpine:3.21
+FROM alpine:3.23
 RUN apk add --no-cache \
       gcompat \
       libgcc \

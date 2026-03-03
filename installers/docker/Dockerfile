@@ -11,7 +11,7 @@ ARG HEW_VERSION=0.1.0
 ARG HEW_ARCH=x86_64
 
 # ── Stage 1: download ────────────────────────────────────────────────────────
-FROM alpine:3.21 AS fetch
+FROM alpine:3.23 AS fetch
 
 ARG HEW_VERSION
 ARG HEW_ARCH
@@ -27,7 +27,7 @@ RUN curl -fsSL \
   && mv "hew-v${HEW_VERSION}-linux-${HEW_ARCH}" hew
 
 # ── Stage 2: runtime image ───────────────────────────────────────────────────
-FROM alpine:3.21
+FROM alpine:3.23
 
 # gcompat: glibc ABI shim for Rust binaries (linked glibc) on Alpine musl.
 # libgcc + libstdc++: needed by hew-codegen (C++/LLVM).
