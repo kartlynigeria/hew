@@ -1221,16 +1221,16 @@ impl Checker {
                 },
                 false,
             );
-            if transition.source_state != "_" {
+            if transition.source_state == "_" {
                 self.current_machine_transition = Some((
                     md.name.clone(),
-                    transition.source_state.clone(),
+                    "_".to_string(),
                     transition.event_name.clone(),
                 ));
             } else {
                 self.current_machine_transition = Some((
                     md.name.clone(),
-                    "_".to_string(),
+                    transition.source_state.clone(),
                     transition.event_name.clone(),
                 ));
             }
@@ -5681,7 +5681,7 @@ impl Checker {
                     } else if let Some((ref mn, _, ref evt_name)) = self.current_machine_transition
                     {
                         // Inside a machine transition: resolve `event.field` on the event enum type
-                        let event_type_name = format!("{}Event", mn);
+                        let event_type_name = format!("{mn}Event");
                         if *name == event_type_name && evt_name != "_" {
                             if let Some(VariantDef::Struct(variant_fields)) =
                                 td.variants.get(evt_name).cloned()
@@ -7716,6 +7716,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::approx_constant,
+        reason = "testing that 3.14 parses as Float, not using it as PI"
+    )]
     fn test_float_literal_type() {
         let mut checker = Checker::new();
         let expr = (Expr::Literal(Literal::Float(3.14)), 0..4);
@@ -8528,7 +8532,7 @@ mod tests {
         ));
         let err = errors
             .iter()
-            .find(|e| e.message.contains("z"))
+            .find(|e| e.message.contains('z'))
             .expect("expected error for undefined field");
         assert!(
             !err.suggestions.is_empty(),
@@ -8780,7 +8784,7 @@ mod tests {
 
     #[test]
     fn no_warn_dead_code_called_from_actor_receive() {
-        let source = r#"
+        let source = r"
 fn fib(n: i32) -> i32 {
     if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
 }
@@ -8794,7 +8798,7 @@ fn main() {
     let w = spawn Worker();
     w.compute(10);
 }
-"#;
+";
         let result = hew_parser::parse(source);
         let mut checker = Checker::new();
         let output = checker.check_program(&result.program);
@@ -8986,9 +8990,9 @@ fn main() {
         }
     }
 
-    /// Helper: build an ImportDecl with resolved items.
+    /// Helper: build an `ImportDecl` with resolved items.
     fn make_user_import(
-        path: Vec<&str>,
+        path: &[&str],
         spec: Option<ImportSpec>,
         items: Vec<Spanned<Item>>,
     ) -> ImportDecl {
@@ -9061,7 +9065,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["myapp", "utils"],
+            &["myapp", "utils"],
             None, // bare import
             vec![(Item::Function(helper), 0..0)],
         );
@@ -9098,7 +9102,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["myapp", "utils"],
+            &["myapp", "utils"],
             Some(ImportSpec::Glob),
             vec![
                 (Item::Function(helper), 0..0),
@@ -9141,7 +9145,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["myapp", "utils"],
+            &["myapp", "utils"],
             Some(ImportSpec::Names(vec![ImportName {
                 name: "helper".to_string(),
                 alias: None,
@@ -9181,7 +9185,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["myapp", "utils"],
+            &["myapp", "utils"],
             Some(ImportSpec::Glob), // even glob shouldn't expose private fns
             vec![
                 (Item::Function(priv_fn), 0..0),
@@ -9233,7 +9237,7 @@ fn main() {
             value: make_int_literal(42, 0..2),
         };
         let import = make_user_import(
-            vec!["myapp", "config"],
+            &["myapp", "config"],
             Some(ImportSpec::Glob),
             vec![
                 (Item::Const(pub_const), 0..0),
@@ -9285,7 +9289,7 @@ fn main() {
             value: make_int_literal(50, 0..2),
         };
         let import = make_user_import(
-            vec!["myapp", "config"],
+            &["myapp", "config"],
             None, // bare import
             vec![(Item::Const(pub_const), 0..0)],
         );
@@ -9332,7 +9336,7 @@ fn main() {
             wire: None,
         };
         let import = make_user_import(
-            vec!["myapp", "config"],
+            &["myapp", "config"],
             None, // bare import
             vec![(Item::TypeDecl(struct_decl), 0..0)],
         );
@@ -9361,7 +9365,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["myapp", "utils"],
+            &["myapp", "utils"],
             None,
             vec![(Item::Function(helper), 0..0)],
         );
@@ -9427,7 +9431,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["mylib", "math"],
+            &["mylib", "math"],
             None,
             vec![(Item::Function(helper), 0..0)],
         );
@@ -9465,12 +9469,12 @@ fn main() {
             }),
         );
         let import_a = make_user_import(
-            vec!["pkg", "alpha"],
+            &["pkg", "alpha"],
             None,
             vec![(Item::Function(helper_a), 0..0)],
         );
         let import_b = make_user_import(
-            vec!["pkg", "beta"],
+            &["pkg", "beta"],
             None,
             vec![(Item::Function(helper_b), 0..0)],
         );
@@ -9507,7 +9511,7 @@ fn main() {
 
     #[test]
     fn empty_module_import_no_crash() {
-        let import = make_user_import(vec!["myapp", "empty"], None, vec![]);
+        let import = make_user_import(&["myapp", "empty"], None, vec![]);
         let output = check_items(vec![(Item::Import(import), 0..0)]);
         assert!(output.user_modules.contains("empty"));
         assert!(output.errors.is_empty());
@@ -9527,7 +9531,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["mymod"],
+            &["mymod"],
             Some(ImportSpec::Names(vec![ImportName {
                 name: "foo".to_string(),
                 alias: Some("bar".to_string()),
@@ -9573,7 +9577,7 @@ fn main() {
             }),
         );
         let import = make_user_import(
-            vec!["pkg"],
+            &["pkg"],
             Some(ImportSpec::Names(vec![
                 ImportName {
                     name: "alpha".to_string(),
@@ -9632,7 +9636,7 @@ fn main() {
             doc_comment: None,
         };
         let import = make_user_import(
-            vec!["mylib", "fmt"],
+            &["mylib", "fmt"],
             Some(ImportSpec::Glob),
             vec![(Item::Trait(trait_decl), 0..0)],
         );
@@ -9671,7 +9675,7 @@ fn main() {
             doc_comment: None,
         };
         let import = make_user_import(
-            vec!["mylib", "internals"],
+            &["mylib", "internals"],
             Some(ImportSpec::Glob),
             vec![(Item::Trait(private_trait), 0..0)],
         );
@@ -9856,7 +9860,7 @@ fn main() {
 
     #[test]
     fn check_generic_lambda() {
-        let source = r#"
+        let source = r"
             fn apply<T>(f: fn(T) -> T, x: T) -> T {
                 f(x)
             }
@@ -9875,7 +9879,7 @@ fn main() {
                 // id matches fn(?0) -> ?0 where ?0=int.
                 let res = apply(id, 5);
             }
-        "#;
+        ";
 
         let result = hew_parser::parse(source);
         assert!(
@@ -9895,7 +9899,7 @@ fn main() {
 
     #[test]
     fn test_self_with_generics_in_impl() {
-        let source = r#"
+        let source = r"
             type Pair<T> {
                 first: T,
                 second: T,
@@ -9910,7 +9914,7 @@ fn main() {
                     return Pair { first: self.second, second: self.first };
                 }
             }
-        "#;
+        ";
 
         let result = hew_parser::parse(source);
         assert!(
@@ -9944,7 +9948,7 @@ fn main() {
     #[test]
     fn test_trait_object_type_args_substitution() {
         // Bug 2: Test that dyn Trait<Args> methods get correct substitutions
-        let source = r#"
+        let source = r"
             trait Iterator<T> {
                 fn next(self: dyn Iterator<T>) -> Option<T>;
             }
@@ -9967,7 +9971,7 @@ fn main() {
                     None => 0
                 }
             }
-        "#;
+        ";
 
         let result = hew_parser::parse(source);
         assert!(
@@ -9981,7 +9985,7 @@ fn main() {
 
         if !output.errors.is_empty() {
             for error in &output.errors {
-                println!("Type error: {}", error);
+                println!("Type error: {error}");
             }
         }
 

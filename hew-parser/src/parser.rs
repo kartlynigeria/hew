@@ -1724,6 +1724,10 @@ impl<'src> Parser<'src> {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "state machine parser has many production rules"
+    )]
     fn parse_machine_decl(&mut self, visibility: Visibility) -> Option<MachineDecl> {
         let name = self.expect_ident()?;
 
@@ -4982,7 +4986,7 @@ mod tests {
 
     #[test]
     fn parse_labeled_while_break_continue() {
-        let source = r#"fn main() -> i32 {
+        let source = r"fn main() -> i32 {
             var i = 0;
             @outer: while i < 5 {
                 var j = 0;
@@ -4993,7 +4997,7 @@ mod tests {
                 i = i + 1;
             }
             0
-        }"#;
+        }";
         let result = parse(source);
         for e in &result.errors {
             eprintln!("Error: {} at {:?}", e.message, e.span);
@@ -5015,12 +5019,12 @@ mod tests {
 
     #[test]
     fn parse_labeled_loop() {
-        let source = r#"fn main() -> i32 {
+        let source = r"fn main() -> i32 {
             @top: loop {
                 break @top;
             }
             0
-        }"#;
+        }";
         let result = parse(source);
         assert!(result.errors.is_empty());
         if let Item::Function(ref f) = result.program.items[0].0 {
@@ -5034,14 +5038,14 @@ mod tests {
 
     #[test]
     fn parse_labeled_continue() {
-        let source = r#"fn main() -> i32 {
+        let source = r"fn main() -> i32 {
             var i = 0;
             @outer: while i < 5 {
                 i = i + 1;
                 continue @outer;
             }
             0
-        }"#;
+        }";
         let result = parse(source);
         for e in &result.errors {
             eprintln!("Error: {} at {:?}", e.message, e.span);
@@ -5051,11 +5055,11 @@ mod tests {
 
     #[test]
     fn parse_for_await_loop() {
-        let source = r#"fn main() {
+        let source = r"fn main() {
             for await item in stream {
                 println(item);
             }
-        }"#;
+        }";
         let result = parse(source);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
 
@@ -5141,16 +5145,15 @@ mod tests {
         let get_str = |idx: usize| -> &str {
             if let (
                 Stmt::Let {
-                    value: Some(val), ..
+                    value: Some((Expr::Literal(Literal::String(s)), _)),
+                    ..
                 },
                 _,
             ) = &stmts[idx]
             {
-                if let (Expr::Literal(Literal::String(s)), _) = val {
-                    return s.as_str();
-                }
+                return s.as_str();
             }
-            panic!("expected let with string literal at index {}", idx);
+            panic!("expected let with string literal at index {idx}");
         };
         assert_eq!(get_str(0), "hello\nworld");
         assert_eq!(get_str(1), "tab\there");
@@ -5640,7 +5643,7 @@ mod tests {
 
     #[test]
     fn parse_import_alias() {
-        let source = r#"import std::net::{http as h, websocket as ws};"#;
+        let source = r"import std::net::{http as h, websocket as ws};";
         let result = parse(source);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
         if let Item::Import(imp) = &result.program.items[0].0 {
@@ -5661,7 +5664,7 @@ mod tests {
 
     #[test]
     fn parse_import_alias_single() {
-        let source = r#"import mymod::{foo as bar};"#;
+        let source = r"import mymod::{foo as bar};";
         let result = parse(source);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
         if let Item::Import(imp) = &result.program.items[0].0 {
@@ -5680,7 +5683,7 @@ mod tests {
     #[test]
     fn parse_import_no_alias_preserves_name() {
         // Names without `as` should have alias = None
-        let source = r#"import mymod::{foo, bar};"#;
+        let source = r"import mymod::{foo, bar};";
         let result = parse(source);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
         if let Item::Import(imp) = &result.program.items[0].0 {
@@ -5701,7 +5704,7 @@ mod tests {
     #[test]
     fn parse_import_bare_colons_rejected() {
         // `import foo::;` is syntactically invalid — `::` must be followed by `*` or `{`
-        let source = r#"import foo::;"#;
+        let source = r"import foo::;";
         let result = parse(source);
         assert!(
             !result.errors.is_empty(),
@@ -5711,7 +5714,7 @@ mod tests {
 
     #[test]
     fn parse_import_glob() {
-        let source = r#"import utils::*;"#;
+        let source = r"import utils::*;";
         let result = parse(source);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
         if let Item::Import(imp) = &result.program.items[0].0 {
