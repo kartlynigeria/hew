@@ -762,7 +762,7 @@ pub unsafe extern "C" fn hew_wire_encode_envelope(
     let e = unsafe { &*env };
     let msg_type = i64::from(e.msg_type);
     if !(0..=MAX_MSG_TYPE).contains(&msg_type) {
-        set_last_error(&format!("msg_type {} out of valid range", e.msg_type));
+        set_last_error(format!("msg_type {} out of valid range", e.msg_type));
         return -1;
     }
 
@@ -864,7 +864,7 @@ pub unsafe extern "C" fn hew_wire_decode_envelope(
                 }
                 let msg_type = hew_wire_zigzag_decode(v);
                 if !(0..=MAX_MSG_TYPE).contains(&msg_type) {
-                    set_last_error(&format!("invalid msg_type: {msg_type}"));
+                    set_last_error(format!("invalid msg_type: {msg_type}"));
                     return -1;
                 }
                 #[expect(
@@ -955,6 +955,10 @@ pub unsafe extern "C" fn hew_wire_decode_envelope(
 ///
 /// `buf` must point to a valid, initialized `HewWireBuf`.
 /// `field_num` and `wire_type` must be valid pointers.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "wire tag field_num and wire_type fit in u32"
+)]
 #[no_mangle]
 pub unsafe extern "C" fn hew_wire_decode_tag(
     buf: *mut HewWireBuf,
@@ -994,8 +998,9 @@ pub unsafe extern "C" fn hew_wire_skip_field(buf: *mut HewWireBuf, wire_type: u3
             0
         }
         HEW_WIRE_FIXED32 => {
-            // SAFETY: caller guarantees `buf` is valid.
+            // SAFETY: caller guarantees `buf` is a valid, initialised wire buffer.
             let rp = unsafe { (*buf).read_pos };
+            // SAFETY: same buf validity guarantee as above.
             let bl = unsafe { (*buf).len };
             if bl.saturating_sub(rp) < 4 {
                 return -1;
@@ -1007,8 +1012,9 @@ pub unsafe extern "C" fn hew_wire_skip_field(buf: *mut HewWireBuf, wire_type: u3
             0
         }
         HEW_WIRE_FIXED64 => {
-            // SAFETY: caller guarantees `buf` is valid.
+            // SAFETY: caller guarantees `buf` is a valid, initialised wire buffer.
             let rp = unsafe { (*buf).read_pos };
+            // SAFETY: same buf validity guarantee as above.
             let bl = unsafe { (*buf).len };
             if bl.saturating_sub(rp) < 8 {
                 return -1;
@@ -1064,11 +1070,7 @@ pub unsafe extern "C" fn hew_wire_buf_len(buf: *const HewWireBuf) -> usize {
 pub unsafe extern "C" fn hew_wire_buf_has_remaining(buf: *const HewWireBuf) -> i32 {
     // SAFETY: caller guarantees `buf` is valid.
     let b = unsafe { &*buf };
-    if b.read_pos < b.len {
-        1
-    } else {
-        0
-    }
+    i32::from(b.read_pos < b.len)
 }
 
 // ---------------------------------------------------------------------------
@@ -1160,6 +1162,7 @@ pub unsafe extern "C" fn hew_wire_decode_string(buf: *mut HewWireBuf) -> *const 
         return std::ptr::null();
     }
     let mut length: u64 = 0;
+    // SAFETY: `buf` was checked non-null above; `&raw mut length` is a valid out-pointer.
     if unsafe { hew_wire_decode_varint(buf, &raw mut length) } != 0 {
         return std::ptr::null();
     }
@@ -1168,6 +1171,7 @@ pub unsafe extern "C" fn hew_wire_decode_string(buf: *mut HewWireBuf) -> *const 
         reason = "wire payloads bounded by buffer size which fits in usize"
     )]
     let len = length as usize;
+    // SAFETY: `buf` was checked non-null above and points to a valid `HewWireBuf`.
     let b = unsafe { &mut *buf };
     let Some(ptr) = b.peek(len) else {
         return std::ptr::null();
@@ -1175,13 +1179,16 @@ pub unsafe extern "C" fn hew_wire_decode_string(buf: *mut HewWireBuf) -> *const 
     b.read_pos += len;
 
     // Allocate len+1 bytes and copy with null terminator
+    // SAFETY: `libc::malloc` is safe to call with any non-zero size.
     let dst = unsafe { libc::malloc(len + 1) }.cast::<u8>();
     if dst.is_null() {
         return std::ptr::null();
     }
     if len > 0 {
+        // SAFETY: `ptr` is valid for `len` bytes (from `peek`), `dst` was just allocated with `len + 1` bytes, and they do not overlap.
         unsafe { std::ptr::copy_nonoverlapping(ptr, dst, len) };
     }
+    // SAFETY: `dst` was allocated with `len + 1` bytes, so `dst.add(len)` is in bounds.
     unsafe { *dst.add(len) = 0 };
     dst.cast::<c_char>()
 }
@@ -1202,15 +1209,20 @@ pub unsafe extern "C" fn hew_wire_decode_string(buf: *mut HewWireBuf) -> *const 
 #[no_mangle]
 pub unsafe extern "C" fn hew_wire_buf_to_bytes(buf: *mut HewWireBuf) -> *mut crate::vec::HewVec {
     if buf.is_null() {
+        // SAFETY: `hew_vec_new` allocates a fresh empty vec; always safe to call.
         return unsafe { crate::vec::hew_vec_new() };
     }
+    // SAFETY: `buf` was checked non-null above and the caller guarantees it is valid.
     let b = unsafe { &*buf };
     let slice = if b.data.is_null() || b.len == 0 {
         &[]
     } else {
+        // SAFETY: `b.data` is non-null and `b.len` bytes were previously written into the buffer.
         unsafe { std::slice::from_raw_parts(b.data, b.len) }
     };
+    // SAFETY: `slice` is a valid byte slice constructed above.
     let v = unsafe { crate::vec::u8_to_hwvec(slice) };
+    // SAFETY: `buf` was returned by `hew_wire_buf_new` and has not yet been freed.
     unsafe { hew_wire_buf_destroy(buf) };
     v
 }
@@ -1218,25 +1230,28 @@ pub unsafe extern "C" fn hew_wire_buf_to_bytes(buf: *mut HewWireBuf) -> *mut cra
 /// Convert a `bytes` (`HewVec*`) to a `HewWireBuf*` for decoding.
 ///
 /// Copies the vec's byte data into a new `HewWireBuf` set up for reading
-/// (read_pos = 0). The caller still owns the `HewVec`.
+/// (`read_pos` = 0). The caller still owns the `HewVec`.
 ///
 /// # Safety
 ///
 /// `vec` must be a valid, non-null pointer to a `HewVec` with i32 elements.
 #[no_mangle]
 pub unsafe extern "C" fn hew_wire_bytes_to_buf(vec: *mut crate::vec::HewVec) -> *mut HewWireBuf {
+    // SAFETY: `vec` is a valid `HewVec` pointer per the caller's contract.
     let bytes = unsafe { crate::vec::hwvec_to_u8(vec) };
+    // SAFETY: `hew_wire_buf_new` allocates a fresh buffer; always safe to call.
     let buf = unsafe { hew_wire_buf_new() };
     if buf.is_null() {
         return buf;
     }
+    // SAFETY: `buf` was just allocated and checked non-null.
     let b = unsafe { &mut *buf };
-    if !bytes.is_empty() {
-        if !unsafe { b.push_bytes(bytes.as_ptr(), bytes.len()) } {
-            set_last_error("hew_wire_bytes_to_buf: allocation failed");
-            unsafe { hew_wire_buf_destroy(buf) };
-            return std::ptr::null_mut();
-        }
+    // SAFETY: `bytes` slice is valid (from `hwvec_to_u8`); `push_bytes` copies from the pointer.
+    if !bytes.is_empty() && !unsafe { b.push_bytes(bytes.as_ptr(), bytes.len()) } {
+        set_last_error("hew_wire_bytes_to_buf: allocation failed");
+        // SAFETY: `buf` was returned by `hew_wire_buf_new` and has not yet been freed.
+        unsafe { hew_wire_buf_destroy(buf) };
+        return std::ptr::null_mut();
     }
     b.read_pos = 0;
     buf
@@ -1261,10 +1276,12 @@ pub unsafe extern "C" fn hew_vec_from_raw_bytes(
     len: usize,
 ) -> *mut crate::vec::HewVec {
     if data.is_null() || len == 0 {
+        // SAFETY: `hew_vec_new` allocates a fresh empty vec; always safe to call.
         return unsafe { crate::vec::hew_vec_new() };
     }
     // SAFETY: caller guarantees data[0..len] is valid.
     let slice = unsafe { std::slice::from_raw_parts(data, len) };
+    // SAFETY: `slice` is a valid byte slice constructed from the caller-provided data.
     unsafe { crate::vec::u8_to_hwvec(slice) }
 }
 

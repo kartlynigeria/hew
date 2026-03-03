@@ -584,33 +584,30 @@ pub unsafe extern "C" fn hew_stream_next_sized(
     }
     // SAFETY: stream is valid per caller contract.
     let s = unsafe { &mut *stream };
-    match s.inner.next() {
-        Some(item) => {
-            let len = item.len();
-            if !out_size.is_null() {
-                // SAFETY: Caller guarantees out_size is valid.
-                unsafe { *out_size = len };
-            }
-            // For empty items, allocate 1 byte so the pointer is non-null.
-            let alloc_len = if len == 0 { 1 } else { len };
-            // SAFETY: libc::malloc returns a valid aligned pointer or null.
-            let buf = unsafe { libc::malloc(alloc_len) };
-            if buf.is_null() {
-                return ptr::null_mut();
-            }
-            if len > 0 {
-                // SAFETY: buf is len bytes allocated above; item.as_ptr() points to len bytes.
-                unsafe { ptr::copy_nonoverlapping(item.as_ptr(), buf.cast::<u8>(), len) };
-            }
-            buf.cast::<c_void>()
+    if let Some(item) = s.inner.next() {
+        let len = item.len();
+        if !out_size.is_null() {
+            // SAFETY: Caller guarantees out_size is valid.
+            unsafe { *out_size = len };
         }
-        None => {
-            if !out_size.is_null() {
-                // SAFETY: Caller guarantees out_size is valid.
-                unsafe { *out_size = 0 };
-            }
-            ptr::null_mut()
+        // For empty items, allocate 1 byte so the pointer is non-null.
+        let alloc_len = if len == 0 { 1 } else { len };
+        // SAFETY: libc::malloc returns a valid aligned pointer or null.
+        let buf = unsafe { libc::malloc(alloc_len) };
+        if buf.is_null() {
+            return ptr::null_mut();
         }
+        if len > 0 {
+            // SAFETY: buf is len bytes allocated above; item.as_ptr() points to len bytes.
+            unsafe { ptr::copy_nonoverlapping(item.as_ptr(), buf.cast::<u8>(), len) };
+        }
+        buf.cast::<c_void>()
+    } else {
+        if !out_size.is_null() {
+            // SAFETY: Caller guarantees out_size is valid.
+            unsafe { *out_size = 0 };
+        }
+        ptr::null_mut()
     }
 }
 
@@ -767,6 +764,10 @@ pub unsafe extern "C" fn hew_stream_chunks(
 ///
 /// Returns a malloc-allocated null-terminated string. The caller must free it.
 /// Consumes the stream.
+///
+/// # Safety
+///
+/// `stream` must be a valid `HewStream` pointer or null.
 #[no_mangle]
 pub unsafe extern "C" fn hew_stream_collect_string(stream: *mut HewStream) -> *mut c_char {
     if stream.is_null() {
@@ -799,6 +800,10 @@ pub unsafe extern "C" fn hew_stream_collect_string(stream: *mut HewStream) -> *m
 /// Count remaining items in a stream.
 ///
 /// Consumes the stream.
+///
+/// # Safety
+///
+/// `stream` must be a valid `HewStream` pointer or null.
 #[no_mangle]
 pub unsafe extern "C" fn hew_stream_count(stream: *mut HewStream) -> i64 {
     if stream.is_null() {

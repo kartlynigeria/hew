@@ -16,6 +16,10 @@ use hew_parser::ast::{
     Block, Expr, ExternFnDecl, FnDecl, ImplDecl, Item, Stmt, TypeBodyItem, TypeExpr,
 };
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "build script is inherently sequential"
+)]
 fn main() {
     let manifest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
@@ -393,6 +397,10 @@ fn wrapper_fn_sig_code(func: &FnDecl, module_short: &str) -> (Vec<String>, Strin
 }
 
 /// Convert a Hew type expression to Rust source code that constructs the corresponding `Ty`.
+#[expect(
+    clippy::too_many_lines,
+    reason = "generated code mapping is inherently large"
+)]
 fn type_expr_to_code(texpr: &TypeExpr, module_short: &str) -> String {
     match texpr {
         TypeExpr::Named { name, type_args } => match name.as_str() {
@@ -495,15 +503,13 @@ fn type_expr_to_code(texpr: &TypeExpr, module_short: &str) -> String {
         }
         TypeExpr::TraitObject(bounds) => {
             let name = bounds.first().map_or("", |b| b.name.as_str());
-            format!(
-                "Ty::TraitObject {{ trait_name: \"{}\".to_string(), args: vec![] }}",
-                name
-            )
+            format!("Ty::TraitObject {{ trait_name: \"{name}\".to_string(), args: vec![] }}")
         }
         TypeExpr::Infer => "Ty::Error".to_string(),
     }
 }
 
+#[expect(clippy::ref_option, reason = "matches generated function signature")]
 fn type_args_to_code(
     type_args: &Option<Vec<(TypeExpr, hew_parser::ast::Span)>>,
     module_short: &str,
@@ -525,13 +531,8 @@ fn extract_call_target(body: &Block) -> Option<(String, usize)> {
     if let Some(trailing) = &body.trailing_expr {
         return call_target_from_expr(&trailing.0);
     }
-    if let Some((stmt, _)) = body.stmts.last() {
-        match stmt {
-            Stmt::Expression(expr) | Stmt::Return(Some(expr)) => {
-                return call_target_from_expr(&expr.0)
-            }
-            _ => {}
-        }
+    if let Some((Stmt::Expression(expr) | Stmt::Return(Some(expr)), _)) = body.stmts.last() {
+        return call_target_from_expr(&expr.0);
     }
     None
 }
@@ -602,6 +603,11 @@ fn generate_code(modules: &BTreeMap<String, ModuleData>) -> String {
 }
 
 fn generate_stdlib_functions(out: &mut String, modules: &BTreeMap<String, ModuleData>) {
+    writeln!(
+        out,
+        "#[expect(clippy::too_many_lines, reason = \"generated stdlib lookup table\")]"
+    )
+    .unwrap();
     writeln!(out, "#[must_use]").unwrap();
     writeln!(
         out,
@@ -641,6 +647,11 @@ fn generate_stdlib_functions(out: &mut String, modules: &BTreeMap<String, Module
 /// because `synthesize_stdlib_externs` in the enricher generates extern declarations
 /// from `stdlib_functions` — wrapper fns must NOT get extern declarations.
 fn generate_wrapper_fn_sigs(out: &mut String, modules: &BTreeMap<String, ModuleData>) {
+    writeln!(
+        out,
+        "#[expect(clippy::too_many_lines, reason = \"generated wrapper lookup table\")]"
+    )
+    .unwrap();
     writeln!(out, "#[must_use]").unwrap();
     writeln!(
         out,
@@ -827,16 +838,22 @@ fn generate_resolve_handle_method(out: &mut String, modules: &BTreeMap<String, M
         }
     }
     for ((type_name, c_symbol), methods) in &grouped {
-        let patterns: Vec<String> = methods
-            .iter()
-            .map(|m| format!("(\"{type_name}\", \"{m}\")"))
-            .collect();
-        writeln!(
-            out,
-            "        {} => Some(\"{c_symbol}\"),",
-            patterns.join(" | ")
-        )
-        .unwrap();
+        if methods.len() == 1 {
+            writeln!(
+                out,
+                "        (\"{type_name}\", \"{}\") => Some(\"{c_symbol}\"),",
+                methods[0]
+            )
+            .unwrap();
+        } else {
+            let method_pats: Vec<String> = methods.iter().map(|m| format!("\"{m}\"")).collect();
+            writeln!(
+                out,
+                "        (\"{type_name}\", {}) => Some(\"{c_symbol}\"),",
+                method_pats.join(" | ")
+            )
+            .unwrap();
+        }
     }
 
     writeln!(out, "        _ => None,").unwrap();

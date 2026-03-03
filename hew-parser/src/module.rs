@@ -142,27 +142,13 @@ impl ModuleGraph {
 
     /// Compute a topological ordering of the module graph via DFS.
     /// Returns `Err(CycleError)` if a cycle is detected.
+    #[expect(clippy::missing_errors_doc, reason = "internal API")]
     pub fn compute_topo_order(&mut self) -> Result<(), CycleError> {
         #[derive(Clone, Copy, PartialEq)]
         enum Mark {
             Temporary,
             Permanent,
         }
-
-        let mut marks: HashMap<ModuleId, Mark> = HashMap::new();
-        let mut order: Vec<ModuleId> = Vec::new();
-
-        // Collect keys up-front to avoid borrow issues.
-        let ids: Vec<ModuleId> = self.modules.keys().cloned().collect();
-
-        for id in &ids {
-            if !marks.contains_key(id) {
-                visit(id, &self.modules, &mut marks, &mut order, &mut Vec::new())?;
-            }
-        }
-
-        self.topo_order = order;
-        return Ok(());
 
         fn visit(
             id: &ModuleId,
@@ -197,6 +183,21 @@ impl ModuleGraph {
             order.push(id.clone());
             Ok(())
         }
+
+        let mut marks: HashMap<ModuleId, Mark> = HashMap::new();
+        let mut order: Vec<ModuleId> = Vec::new();
+
+        // Collect keys up-front to avoid borrow issues.
+        let ids: Vec<ModuleId> = self.modules.keys().cloned().collect();
+
+        for id in &ids {
+            if !marks.contains_key(id) {
+                visit(id, &self.modules, &mut marks, &mut order, &mut Vec::new())?;
+            }
+        }
+
+        self.topo_order = order;
+        Ok(())
     }
 }
 

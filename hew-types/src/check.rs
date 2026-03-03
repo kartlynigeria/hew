@@ -155,6 +155,10 @@ pub struct FnSig {
 
 /// The main type checker.
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "checker state flags are independent booleans"
+)]
 pub struct Checker {
     env: TypeEnv,
     subst: Substitution,
@@ -174,7 +178,7 @@ pub struct Checker {
     known_types: HashSet<String>,
     type_aliases: HashMap<String, Ty>,
     trait_defs: HashMap<String, TraitInfo>,
-    /// Maps trait name → list of super-trait names (e.g., "Pet" → ["Animal"])
+    /// Maps trait name → list of super-trait names (e.g., `Pet` → [`Animal`])
     trait_super: HashMap<String, Vec<String>>,
     /// Set of (`type_name`, `trait_name`) pairs for concrete impl registrations
     trait_impls_set: HashSet<(String, String)>,
@@ -220,7 +224,7 @@ pub struct Checker {
     wasm_target: bool,
     /// Tracks (span, feature) pairs we've already warned about for WASM limits.
     wasm_warning_spans: HashSet<(SpanKey, WasmUnsupportedFeature)>,
-    /// Inside a machine transition body, the (machine_name, source_state_name) pair.
+    /// Inside a machine transition body, the (`machine_name`, `source_state_name`) pair.
     current_machine_transition: Option<(String, String)>,
 }
 
@@ -703,6 +707,7 @@ impl Checker {
         }
     }
 
+    #[expect(clippy::too_many_lines, reason = "type resolution requires many cases")]
     fn register_type_decl(&mut self, td: &TypeDecl) {
         let kind = match td.kind {
             TypeDeclKind::Struct => TypeDefKind::Struct,
@@ -819,7 +824,7 @@ impl Checker {
         }
     }
 
-    /// Register codec methods for a wire type (encode, decode, to_json, from_json, etc.).
+    /// Register codec methods for a wire type (encode, decode, `to_json`, `from_json`, etc.).
     fn register_wire_methods(&mut self, type_name: &str) {
         let self_ty = Ty::Named {
             name: type_name.to_string(),
@@ -965,6 +970,10 @@ impl Checker {
     }
 
     /// Register a machine declaration as a type definition with variants and methods.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "machine registration requires registering states, events, transitions, and methods"
+    )]
     fn register_machine_decl(&mut self, md: &MachineDecl) {
         let machine_ty = Ty::Machine {
             name: md.name.clone(),
@@ -1090,6 +1099,10 @@ impl Checker {
     }
 
     /// Check that the machine's state × event matrix is fully covered.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "exhaustiveness checking requires many validation steps"
+    )]
     fn check_machine_exhaustiveness(&mut self, md: &MachineDecl, span: &Span) {
         let state_names: Vec<&str> = md.states.iter().map(|s| s.name.as_str()).collect();
         let event_names: Vec<&str> = md.events.iter().map(|e| e.name.as_str()).collect();
@@ -1320,7 +1333,7 @@ impl Checker {
                     associated_types.push(TraitAssociatedTypeInfo {
                         name: name.clone(),
                         default: default.clone(),
-                    })
+                    });
                 }
             }
         }
@@ -1406,8 +1419,7 @@ impl Checker {
                             TypeErrorKind::UndefinedType,
                             span,
                             format!(
-                                "impl `{}` for `{}` must define associated type `{}`",
-                                tb_name, target_name, name
+                                "impl `{tb_name}` for `{target_name}` must define associated type `{name}`"
                             ),
                         );
                     }
@@ -1428,47 +1440,42 @@ impl Checker {
     }
 
     fn resolve_impl_associated_type(&mut self, alias: &str) -> Option<Ty> {
-        let Some(scope_index) = self.impl_alias_scopes.len().checked_sub(1) else {
-            return None;
-        };
+        let scope_index = self.impl_alias_scopes.len().checked_sub(1)?;
         let expr = {
             let scope = &mut self.impl_alias_scopes[scope_index];
-            match scope.entries.get_mut(alias) {
-                Some(entry) => {
-                    if let Some(resolved) = &entry.resolved {
-                        return Some(resolved.clone());
-                    }
-                    if entry.resolving {
-                        let should_report = scope.report_missing
-                            && scope.missing_reported.insert(alias.to_string());
-                        let err_span = entry.expr.1.clone();
-                        if should_report {
-                            self.report_error(
-                                TypeErrorKind::InvalidOperation,
-                                &err_span,
-                                format!(
-                                    "associated type `Self::{alias}` recursively references itself"
-                                ),
-                            );
-                        }
-                        return Some(Ty::Error);
-                    }
-                    entry.resolving = true;
-                    entry.expr.clone()
+            if let Some(entry) = scope.entries.get_mut(alias) {
+                if let Some(resolved) = &entry.resolved {
+                    return Some(resolved.clone());
                 }
-                None => {
+                if entry.resolving {
                     let should_report =
                         scope.report_missing && scope.missing_reported.insert(alias.to_string());
-                    let err_span = scope.span.clone();
+                    let err_span = entry.expr.1.clone();
                     if should_report {
                         self.report_error(
-                            TypeErrorKind::UndefinedType,
+                            TypeErrorKind::InvalidOperation,
                             &err_span,
-                            format!("type alias `Self::{alias}` is not defined in this impl"),
+                            format!(
+                                "associated type `Self::{alias}` recursively references itself"
+                            ),
                         );
                     }
                     return Some(Ty::Error);
                 }
+                entry.resolving = true;
+                entry.expr.clone()
+            } else {
+                let should_report =
+                    scope.report_missing && scope.missing_reported.insert(alias.to_string());
+                let err_span = scope.span.clone();
+                if should_report {
+                    self.report_error(
+                        TypeErrorKind::UndefinedType,
+                        &err_span,
+                        format!("type alias `Self::{alias}` is not defined in this impl"),
+                    );
+                }
+                return Some(Ty::Error);
             }
         };
         let ty = self.resolve_type_expr(&expr.0);
@@ -1508,6 +1515,10 @@ impl Checker {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "expression type checking requires many cases"
+    )]
     fn collect_function_item(&mut self, item: &Item, span: &Span) {
         match item {
             Item::Function(fd) => {
@@ -1692,6 +1703,10 @@ impl Checker {
         self.register_fn_sig_with_name(&fd.name, fd);
     }
 
+    #[expect(
+        clippy::unused_self,
+        reason = "method signature is part of the checker API"
+    )]
     fn collect_type_param_bounds(
         &self,
         type_params: Option<&Vec<TypeParam>>,
@@ -1783,7 +1798,7 @@ impl Checker {
         self.fn_sigs.insert(name.to_string(), sig);
     }
 
-    /// Register an impl method on a type's method table and fn_sigs.
+    /// Register an impl method on a type's method table and `fn_sigs`.
     ///
     /// Returns the built `FnSig` for callers that need to insert it
     /// on additional type names (e.g., qualified aliases).
@@ -2015,6 +2030,7 @@ impl Checker {
     }
 
     /// Determine whether a name should be imported unqualified based on the `ImportSpec`.
+    #[expect(clippy::ref_option, reason = "avoids cloning the option contents")]
     fn should_import_name(name: &str, spec: &Option<ImportSpec>) -> bool {
         match spec {
             None => false,                  // bare import → qualified only
@@ -2026,6 +2042,7 @@ impl Checker {
     }
 
     /// Resolve the binding name for an imported symbol, applying any alias.
+    #[expect(clippy::ref_option, reason = "avoids cloning the option contents")]
     fn resolve_import_name(spec: &Option<ImportSpec>, name: &str) -> Option<String> {
         match spec {
             Some(ImportSpec::Names(names)) => names
@@ -2214,6 +2231,11 @@ impl Checker {
     }
 
     /// Register items from a user module under the module's namespace.
+    #[expect(
+        clippy::too_many_lines,
+        clippy::ref_option,
+        reason = "statement type checking requires many cases"
+    )]
     fn register_user_module(
         &mut self,
         module_short: &str,
@@ -2252,7 +2274,6 @@ impl Checker {
                     }
                     self.known_types.insert(td.name.clone());
                 }
-                Item::TypeAlias(_) => {}
                 Item::Trait(tr) => {
                     if !tr.visibility.is_pub() {
                         continue;
@@ -3113,7 +3134,7 @@ impl Checker {
                         Ty::Tuple(vec![args[0].clone(), args[1].clone()])
                     }
                     Ty::Named { name, args }
-                        if (name == "Generator" && args.len() >= 1)
+                        if (name == "Generator" && !args.is_empty())
                             || (name == "AsyncGenerator" && args.len() == 1) =>
                     {
                         args[0].clone()
@@ -3199,7 +3220,7 @@ impl Checker {
             return;
         }
         match expr {
-            Expr::Scope { .. } => {
+            Expr::Scope { .. } | Expr::Join(_) => {
                 self.warn_wasm_limitation(span, WasmUnsupportedFeature::StructuredConcurrency);
             }
             Expr::ScopeLaunch(_) | Expr::ScopeSpawn(_) => {
@@ -3208,13 +3229,14 @@ impl Checker {
             Expr::Select { .. } => {
                 self.warn_wasm_limitation(span, WasmUnsupportedFeature::Select);
             }
-            Expr::Join(_) => {
-                self.warn_wasm_limitation(span, WasmUnsupportedFeature::StructuredConcurrency);
-            }
             _ => {}
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "expression check covers all AST variants"
+    )]
     fn synthesize_inner(&mut self, expr: &Expr, span: &Span) -> Ty {
         self.maybe_warn_wasm_expr(expr, span);
         let ty = match expr {
@@ -3236,7 +3258,7 @@ impl Checker {
             }
             Expr::Literal(Literal::Bool(_)) => Ty::Bool,
             Expr::Literal(Literal::Char(_)) => Ty::Char,
-            Expr::Literal(Literal::Integer { .. }) | Expr::Literal(Literal::Duration(_)) => Ty::I64,
+            Expr::Literal(Literal::Integer { .. } | Literal::Duration(_)) => Ty::I64,
 
             // Identifier lookup
             Expr::Identifier(name) => {
@@ -3328,8 +3350,9 @@ impl Checker {
                                     if sig.params.is_empty() {
                                         let ret = &sig.return_type;
                                         let matches_type = match ret {
-                                            Ty::Machine { name: n } => n == type_prefix,
-                                            Ty::Named { name: n, .. } => n == type_prefix,
+                                            Ty::Machine { name: n } | Ty::Named { name: n, .. } => {
+                                                n == type_prefix
+                                            }
                                             _ => false,
                                         };
                                         if matches_type {
@@ -3906,6 +3929,10 @@ impl Checker {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "builtin method resolution requires many cases"
+    )]
     fn check_binary_op(&mut self, left: &Spanned<Expr>, op: BinaryOp, right: &Spanned<Expr>) -> Ty {
         let left_ty = self.synthesize(&left.0, &left.1);
         let right_ty = self.synthesize(&right.0, &right.1);
@@ -4317,31 +4344,28 @@ impl Checker {
                 let (idx_expr, idx_sp) = args[1].expr();
                 self.check_against(idx_expr, idx_sp, &Ty::I64);
 
-                if let Some(inner) = sup_ty_resolved.as_actor_ref() {
-                    if let Ty::Named { name: sup_name, .. } = inner {
-                        if let Some(children) = self.supervisor_children.get(sup_name) {
-                            if let Expr::Literal(hew_parser::ast::Literal::Integer {
-                                value: idx,
-                                ..
-                            }) = idx_expr
-                            {
-                                #[expect(
-                                    clippy::cast_sign_loss,
-                                    clippy::cast_possible_truncation,
-                                    reason = "supervisor child index is always non-negative and small"
-                                )]
-                                let i = *idx as usize;
-                                if i < children.len() {
-                                    let child_type = &children[i];
-                                    return Ty::actor_ref(Ty::Named {
-                                        name: child_type.clone(),
-                                        args: vec![],
-                                    });
-                                }
+                if let Some(Ty::Named { name: sup_name, .. }) = sup_ty_resolved.as_actor_ref() {
+                    if let Some(children) = self.supervisor_children.get(sup_name) {
+                        if let Expr::Literal(hew_parser::ast::Literal::Integer {
+                            value: idx, ..
+                        }) = idx_expr
+                        {
+                            #[expect(
+                                clippy::cast_sign_loss,
+                                clippy::cast_possible_truncation,
+                                reason = "supervisor child index is always non-negative and small"
+                            )]
+                            let i = *idx as usize;
+                            if i < children.len() {
+                                let child_type = &children[i];
+                                return Ty::actor_ref(Ty::Named {
+                                    name: child_type.clone(),
+                                    args: vec![],
+                                });
                             }
-                            // Non-constant index: fresh type var
-                            return Ty::actor_ref(Ty::Var(TypeVar::fresh()));
                         }
+                        // Non-constant index: fresh type var
+                        return Ty::actor_ref(Ty::Var(TypeVar::fresh()));
                     }
                 }
                 return Ty::actor_ref(Ty::Var(TypeVar::fresh()));
@@ -4890,7 +4914,7 @@ impl Checker {
                 }
                 "pop" => Ty::I32,
                 "len" => Ty::I64,
-                "get" => {
+                "get" | "remove" => {
                     if let Some(idx) = args.first() {
                         let (expr, sp) = idx.expr();
                         self.check_against(expr, sp, &Ty::I64);
@@ -4910,13 +4934,6 @@ impl Checker {
                 }
                 "is_empty" => Ty::Bool,
                 "clear" => Ty::Unit,
-                "remove" => {
-                    if let Some(idx) = args.first() {
-                        let (expr, sp) = idx.expr();
-                        self.check_against(expr, sp, &Ty::I64);
-                    }
-                    Ty::I32
-                }
                 "contains" => {
                     if let Some(arg) = args.first() {
                         let (expr, sp) = arg.expr();
@@ -4949,15 +4966,15 @@ impl Checker {
                     "to_i8" => Ty::I8,
                     "to_i16" => Ty::I16,
                     "to_i32" => Ty::I32,
-                    "to_i64" => Ty::I64,
+                    // to_isize maps to I64 (platform-dependent, default 64-bit)
+                    "to_i64" | "to_isize" => Ty::I64,
                     "to_u8" => Ty::U8,
                     "to_u16" => Ty::U16,
                     "to_u32" => Ty::U32,
-                    "to_u64" => Ty::U64,
+                    // to_usize maps to U64 (platform-dependent, default 64-bit)
+                    "to_u64" | "to_usize" => Ty::U64,
                     "to_f32" => Ty::F32,
                     "to_f64" => Ty::F64,
-                    "to_isize" => Ty::I64, // platform-dependent, default 64-bit
-                    "to_usize" => Ty::U64,
                     _ => {
                         self.report_error(
                             TypeErrorKind::UndefinedMethod,
@@ -5301,11 +5318,7 @@ impl Checker {
                 },
                 "next",
             ) if name == "Generator" || name == "AsyncGenerator" => {
-                if name == "Generator" {
-                    type_args.first().cloned().unwrap_or(Ty::Error)
-                } else {
-                    type_args.first().cloned().unwrap_or(Ty::Error)
-                }
+                type_args.first().cloned().unwrap_or(Ty::Error)
             }
             // Stream<T> methods
             (
@@ -5809,6 +5822,10 @@ impl Checker {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "trait impl checking requires many cases"
+    )]
     fn check_struct_init(
         &mut self,
         name: &str,
@@ -6002,6 +6019,10 @@ impl Checker {
     }
 
     /// Pattern binding
+    #[expect(
+        clippy::too_many_lines,
+        reason = "impl method resolution requires many cases"
+    )]
     fn bind_pattern(&mut self, pattern: &Pattern, ty: &Ty, is_mutable: bool, span: &Span) {
         let ty = &self.subst.resolve(ty);
         match pattern {
@@ -6336,8 +6357,7 @@ impl Checker {
                     TypeErrorKind::BoundsNotSatisfied,
                     span,
                     format!(
-                        "type `{}` does not implement trait `{}` required by `{}`",
-                        resolved_arg, bound, param_name
+                        "type `{resolved_arg}` does not implement trait `{bound}` required by `{param_name}`"
                     ),
                 );
             }
@@ -6550,6 +6570,10 @@ impl Checker {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "generic instantiation requires many cases"
+    )]
     fn resolve_type_expr(&mut self, te: &TypeExpr) -> Ty {
         match te {
             TypeExpr::Named { name, type_args } => {
@@ -6796,7 +6820,6 @@ impl Checker {
     }
 
     /// Check if an expression is typically used for side effects (not for its return value).
-
     fn record_type(&mut self, span: &Span, ty: &Ty) {
         self.expr_types.insert(SpanKey::from(span), ty.clone());
     }
@@ -6904,6 +6927,10 @@ impl Checker {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "associated type resolution requires many cases"
+    )]
     fn check_exhaustiveness(&mut self, scrutinee_ty: &Ty, arms: &[MatchArm], span: &Span) {
         fn visit_or_patterns<'a, F: FnMut(&'a Pattern)>(pattern: &'a Pattern, f: &mut F) {
             match pattern {

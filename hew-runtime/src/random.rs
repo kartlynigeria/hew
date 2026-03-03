@@ -34,24 +34,32 @@ impl MtState {
             gauss_has_spare: false,
         };
         // Default seed so calls before seed() still work.
-        s.init_genrand(19650218);
+        s.init_genrand(19_650_218);
         s
     }
 
-    /// CPython `init_genrand`.
+    /// `CPython` `init_genrand`.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "MT19937 array index is always < 624, fits in u32"
+    )]
     fn init_genrand(&mut self, seed: u32) {
         self.mt[0] = seed;
         for i in 1..N {
-            self.mt[i] = 1812433253u32
+            self.mt[i] = 1_812_433_253u32
                 .wrapping_mul(self.mt[i - 1] ^ (self.mt[i - 1] >> 30))
                 .wrapping_add(i as u32);
         }
         self.mti = N;
     }
 
-    /// CPython `init_by_array`.
+    /// `CPython` `init_by_array`.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "MT19937 array index is always < 624, fits in u32"
+    )]
     fn init_by_array(&mut self, init_key: &[u32]) {
-        self.init_genrand(19650218);
+        self.init_genrand(19_650_218);
         let mut i: usize = 1;
         let mut j: usize = 0;
         let k = if N > init_key.len() {
@@ -61,7 +69,7 @@ impl MtState {
         };
         for _ in 0..k {
             self.mt[i] = (self.mt[i]
-                ^ ((self.mt[i - 1] ^ (self.mt[i - 1] >> 30)).wrapping_mul(1664525)))
+                ^ ((self.mt[i - 1] ^ (self.mt[i - 1] >> 30)).wrapping_mul(1_664_525)))
             .wrapping_add(init_key[j])
             .wrapping_add(j as u32);
             i += 1;
@@ -76,7 +84,7 @@ impl MtState {
         }
         for _ in 0..(N - 1) {
             self.mt[i] = (self.mt[i]
-                ^ ((self.mt[i - 1] ^ (self.mt[i - 1] >> 30)).wrapping_mul(1566083941)))
+                ^ ((self.mt[i - 1] ^ (self.mt[i - 1] >> 30)).wrapping_mul(1_566_083_941)))
             .wrapping_sub(i as u32);
             i += 1;
             if i >= N {
@@ -118,11 +126,11 @@ impl MtState {
         y
     }
 
-    /// CPython `random()` — 53-bit precision float in [0.0, 1.0).
+    /// `CPython` `random()` — 53-bit precision float in [0.0, 1.0).
     fn random(&mut self) -> f64 {
         let a = self.genrand_uint32() >> 5; // 27 bits
         let b = self.genrand_uint32() >> 6; // 26 bits
-        (f64::from(a) * 67108864.0 + f64::from(b)) / 9007199254740992.0
+        (f64::from(a) * 67_108_864.0 + f64::from(b)) / 9_007_199_254_740_992.0
     }
 
     /// Number of bits needed to represent `n`.
@@ -134,7 +142,7 @@ impl MtState {
         }
     }
 
-    /// CPython `getrandbits(k)` — generate a k-bit random integer.
+    /// `CPython` `getrandbits(k)` — generate a k-bit random integer.
     fn getrandbits(&mut self, k: u32) -> u64 {
         if k == 0 {
             return 0;
@@ -151,7 +159,7 @@ impl MtState {
         result
     }
 
-    /// CPython `_randbelow(n)` using rejection sampling.
+    /// `CPython` `_randbelow(n)` using rejection sampling.
     fn randbelow(&mut self, n: u64) -> u64 {
         if n <= 1 {
             return 0;
@@ -193,6 +201,7 @@ thread_local! {
 ///
 /// Called from compiled Hew programs via C ABI.
 #[no_mangle]
+#[expect(clippy::cast_sign_loss, reason = "seed is masked to low 32 bits")]
 pub unsafe extern "C" fn hew_random_seed(seed: i64) {
     MT_STATE.with(|s| {
         let mut st = s.borrow_mut();
@@ -228,6 +237,14 @@ pub unsafe extern "C" fn hew_random_gauss(mu: f64, sigma: f64) -> f64 {
 ///
 /// Called from compiled Hew programs via C ABI.
 #[no_mangle]
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "hi > lo is guaranteed by the check above"
+)]
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "randbelow(range) < range which fits in i64"
+)]
 pub unsafe extern "C" fn hew_random_randint(lo: i64, hi: i64) -> i64 {
     if hi <= lo {
         return lo;
@@ -242,6 +259,14 @@ pub unsafe extern "C" fn hew_random_randint(lo: i64, hi: i64) -> i64 {
 ///
 /// `v` must be a valid `HewVec` pointer containing i64 elements.
 #[no_mangle]
+#[expect(
+    clippy::cast_ptr_alignment,
+    reason = "HewVec data is always properly aligned for its element type"
+)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "shuffle index is bounded by vec length"
+)]
 pub unsafe extern "C" fn hew_random_shuffle_i64(v: *mut HewVec) {
     if v.is_null() {
         return;
@@ -274,6 +299,14 @@ pub unsafe extern "C" fn hew_random_shuffle_i64(v: *mut HewVec) {
 ///
 /// `v` must be a valid `HewVec` pointer containing f64 cumulative weights.
 #[no_mangle]
+#[expect(
+    clippy::cast_ptr_alignment,
+    reason = "HewVec data is always properly aligned for its element type"
+)]
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "bisect index is bounded by vec length"
+)]
 pub unsafe extern "C" fn hew_random_choices_vec(v: *mut HewVec, total: f64, _n: i64) -> i64 {
     if v.is_null() {
         return 0;
@@ -291,7 +324,7 @@ pub unsafe extern "C" fn hew_random_choices_vec(v: *mut HewVec, total: f64, _n: 
         let mut lo: usize = 0;
         let mut hi: usize = len;
         while lo < hi {
-            let mid = (lo + hi) / 2;
+            let mid = usize::midpoint(lo, hi);
             if r >= *data.add(mid) {
                 lo = mid + 1;
             } else {

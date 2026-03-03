@@ -103,6 +103,7 @@ unsafe fn abort_oob(index: usize, len: usize) -> ! {
 /// Always aborts — safe to call from any context.
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_abort_oob(index: i64, len: i64) -> ! {
+    // SAFETY: abort_oob writes to stderr and aborts; always safe to call.
     unsafe { abort_oob(index as usize, len as usize) }
 }
 
@@ -149,11 +150,11 @@ pub unsafe extern "C" fn hew_vec_new_with_elem_size(elem_size: i64) -> *mut HewV
 /// The returned pointer must eventually be freed with [`hew_vec_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_new() -> *mut HewVec {
-    // SAFETY: forwarding to `hew_vec_new_with_elem_size`.
     #[expect(
         clippy::cast_possible_wrap,
         reason = "size_of::<i32>() is 4, fits in i64"
     )]
+    // SAFETY: forwarding to `hew_vec_new_with_elem_size` with a valid element size.
     unsafe {
         hew_vec_new_with_elem_size(core::mem::size_of::<i32>() as i64)
     }
@@ -166,11 +167,11 @@ pub unsafe extern "C" fn hew_vec_new() -> *mut HewVec {
 /// The returned pointer must eventually be freed with [`hew_vec_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_new_str() -> *mut HewVec {
-    // SAFETY: forwarding to `hew_vec_new_with_elem_size`.
     #[expect(
         clippy::cast_possible_wrap,
         reason = "size_of::<*const c_char>() is 4 or 8, fits in i64"
     )]
+    // SAFETY: forwarding to `hew_vec_new_with_elem_size` with pointer-sized elements.
     let v = unsafe { hew_vec_new_with_elem_size(core::mem::size_of::<*const c_char>() as i64) };
     // SAFETY: v is non-null (hew_vec_new_with_elem_size aborts on OOM).
     unsafe { (*v).elem_kind = ElemKind::String };
@@ -184,11 +185,11 @@ pub unsafe extern "C" fn hew_vec_new_str() -> *mut HewVec {
 /// The returned pointer must eventually be freed with [`hew_vec_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_new_i64() -> *mut HewVec {
-    // SAFETY: forwarding to `hew_vec_new_with_elem_size`.
     #[expect(
         clippy::cast_possible_wrap,
         reason = "size_of::<i64>() is 8, fits in i64"
     )]
+    // SAFETY: forwarding to `hew_vec_new_with_elem_size` with a valid element size.
     unsafe {
         hew_vec_new_with_elem_size(core::mem::size_of::<i64>() as i64)
     }
@@ -201,11 +202,11 @@ pub unsafe extern "C" fn hew_vec_new_i64() -> *mut HewVec {
 /// The returned pointer must eventually be freed with [`hew_vec_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_new_f64() -> *mut HewVec {
-    // SAFETY: forwarding to `hew_vec_new_with_elem_size`.
     #[expect(
         clippy::cast_possible_wrap,
         reason = "size_of::<f64>() is 8, fits in i64"
     )]
+    // SAFETY: forwarding to `hew_vec_new_with_elem_size` with a valid element size.
     unsafe {
         hew_vec_new_with_elem_size(core::mem::size_of::<f64>() as i64)
     }
@@ -218,11 +219,11 @@ pub unsafe extern "C" fn hew_vec_new_f64() -> *mut HewVec {
 /// The returned pointer must eventually be freed with [`hew_vec_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_new_ptr() -> *mut HewVec {
-    // SAFETY: forwarding to `hew_vec_new_with_elem_size`.
     #[expect(
         clippy::cast_possible_wrap,
         reason = "size_of::<*mut c_void>() is 4 or 8, fits in i64"
     )]
+    // SAFETY: forwarding to `hew_vec_new_with_elem_size` with pointer-sized elements.
     unsafe {
         hew_vec_new_with_elem_size(core::mem::size_of::<*mut c_void>() as i64)
     }
@@ -244,6 +245,7 @@ pub unsafe extern "C" fn hew_vec_from_u8_data(data: *const u8, len: u32) -> *mut
     // Pre-allocate capacity.
     // SAFETY: v is freshly created and valid.
     unsafe { ensure_cap(v, len as usize) };
+    // SAFETY: v is valid and has capacity for len i32 elements after ensure_cap.
     let dst = unsafe { (*v).data.cast::<i32>() };
     for i in 0..len as usize {
         // SAFETY: data is valid for len bytes; dst has capacity for len i32s.
@@ -271,9 +273,8 @@ pub unsafe extern "C" fn hew_vec_push_i32(v: *mut HewVec, val: i32) {
     // SAFETY: caller guarantees `v` is valid.
     unsafe {
         let len = (*v).len;
-        let new_len = match len.checked_add(1) {
-            Some(n) => n,
-            None => libc::abort(),
+        let Some(new_len) = len.checked_add(1) else {
+            libc::abort();
         };
         ensure_cap(v, new_len);
         let slot = (*v).data.cast::<i32>().add(len);
@@ -292,9 +293,8 @@ pub unsafe extern "C" fn hew_vec_push_i64(v: *mut HewVec, val: i64) {
     // SAFETY: caller guarantees `v` is valid.
     unsafe {
         let len = (*v).len;
-        let new_len = match len.checked_add(1) {
-            Some(n) => n,
-            None => libc::abort(),
+        let Some(new_len) = len.checked_add(1) else {
+            libc::abort();
         };
         ensure_cap(v, new_len);
         let slot = (*v).data.cast::<i64>().add(len);
@@ -313,9 +313,8 @@ pub unsafe extern "C" fn hew_vec_push_str(v: *mut HewVec, val: *const c_char) {
     // SAFETY: caller guarantees `v` and `val` are valid.
     unsafe {
         let len = (*v).len;
-        let new_len = match len.checked_add(1) {
-            Some(n) => n,
-            None => libc::abort(),
+        let Some(new_len) = len.checked_add(1) else {
+            libc::abort();
         };
         ensure_cap(v, new_len);
         let duped = libc::strdup(val);
@@ -338,9 +337,8 @@ pub unsafe extern "C" fn hew_vec_push_f64(v: *mut HewVec, val: f64) {
     // SAFETY: caller guarantees `v` is valid.
     unsafe {
         let len = (*v).len;
-        let new_len = match len.checked_add(1) {
-            Some(n) => n,
-            None => libc::abort(),
+        let Some(new_len) = len.checked_add(1) else {
+            libc::abort();
         };
         ensure_cap(v, new_len);
         let slot = (*v).data.cast::<f64>().add(len);
@@ -359,9 +357,8 @@ pub unsafe extern "C" fn hew_vec_push_ptr(v: *mut HewVec, val: *mut c_void) {
     // SAFETY: caller guarantees `v` is valid.
     unsafe {
         let len = (*v).len;
-        let new_len = match len.checked_add(1) {
-            Some(n) => n,
-            None => libc::abort(),
+        let Some(new_len) = len.checked_add(1) else {
+            libc::abort();
         };
         ensure_cap(v, new_len);
         let slot = (*v).data.cast::<*mut c_void>().add(len);
@@ -636,11 +633,11 @@ pub unsafe extern "C" fn hew_vec_pop_f64(v: *mut HewVec) -> f64 {
 /// `v` must be a valid `HewVec` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_len(v: *mut HewVec) -> i64 {
-    // SAFETY: caller guarantees `v` is valid.
     #[expect(
         clippy::cast_possible_wrap,
         reason = "vec length won't exceed i64::MAX"
     )]
+    // SAFETY: caller guarantees `v` is a valid HewVec pointer.
     unsafe {
         (*v).len as i64
     }
@@ -849,9 +846,8 @@ pub unsafe extern "C" fn hew_vec_append(dst: *mut HewVec, src: *const HewVec) {
         if (*dst).elem_size != (*src).elem_size || (*dst).elem_kind != (*src).elem_kind {
             libc::abort();
         }
-        let new_len = match (*dst).len.checked_add(src_len) {
-            Some(v) => v,
-            None => libc::abort(),
+        let Some(new_len) = (*dst).len.checked_add(src_len) else {
+            libc::abort();
         };
         ensure_cap(dst, new_len);
         let elem_size = (*dst).elem_size;
@@ -956,6 +952,10 @@ pub unsafe extern "C" fn hew_vec_remove_i64(v: *mut HewVec, val: i64) {
 /// # Safety
 ///
 /// `v` must be a valid f64 `HewVec` pointer.
+#[expect(
+    clippy::float_cmp,
+    reason = "exact equality is intentional for element removal"
+)]
 #[no_mangle]
 pub unsafe extern "C" fn hew_vec_remove_f64(v: *mut HewVec, val: f64) {
     cabi_guard!(v.is_null());
@@ -1207,9 +1207,8 @@ pub unsafe extern "C" fn hew_vec_push_generic(v: *mut HewVec, data: *const core:
     // SAFETY: caller guarantees `v` and `data` are valid.
     unsafe {
         let len = (*v).len;
-        let new_len = match len.checked_add(1) {
-            Some(n) => n,
-            None => libc::abort(),
+        let Some(new_len) = len.checked_add(1) else {
+            libc::abort();
         };
         ensure_cap(v, new_len);
         let elem_size = (*v).elem_size;

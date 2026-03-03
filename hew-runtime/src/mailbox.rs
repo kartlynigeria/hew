@@ -368,16 +368,13 @@ fn update_high_water_mark(mb: &HewMailbox) {
 /// Returned pointer must be freed with [`hew_mailbox_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_mailbox_new() -> *mut HewMailbox {
-    let user_fast = match MpscQueue::new() {
-        Some(q) => q,
-        None => return ptr::null_mut(),
+    let Some(user_fast) = MpscQueue::new() else {
+        return ptr::null_mut();
     };
-    let sys_queue = match MpscQueue::new() {
-        Some(q) => q,
-        None => {
-            unsafe { user_fast.drain_and_free() };
-            return ptr::null_mut();
-        }
+    let Some(sys_queue) = MpscQueue::new() else {
+        // SAFETY: user_fast was just successfully created and has no enqueued nodes yet.
+        unsafe { user_fast.drain_and_free() };
+        return ptr::null_mut();
     };
 
     Box::into_raw(Box::new(HewMailbox {
@@ -406,16 +403,13 @@ pub unsafe extern "C" fn hew_mailbox_new() -> *mut HewMailbox {
 /// Returned pointer must be freed with [`hew_mailbox_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_mailbox_new_bounded(capacity: i32) -> *mut HewMailbox {
-    let user_fast = match MpscQueue::new() {
-        Some(q) => q,
-        None => return ptr::null_mut(),
+    let Some(user_fast) = MpscQueue::new() else {
+        return ptr::null_mut();
     };
-    let sys_queue = match MpscQueue::new() {
-        Some(q) => q,
-        None => {
-            unsafe { user_fast.drain_and_free() };
-            return ptr::null_mut();
-        }
+    let Some(sys_queue) = MpscQueue::new() else {
+        // SAFETY: user_fast was just successfully created and has no enqueued nodes yet.
+        unsafe { user_fast.drain_and_free() };
+        return ptr::null_mut();
     };
 
     let policy = HewOverflowPolicy::DropNew;
@@ -450,16 +444,13 @@ pub unsafe extern "C" fn hew_mailbox_new_with_policy(
     capacity: usize,
     policy: OverflowPolicy,
 ) -> *mut HewMailbox {
-    let user_fast = match MpscQueue::new() {
-        Some(q) => q,
-        None => return ptr::null_mut(),
+    let Some(user_fast) = MpscQueue::new() else {
+        return ptr::null_mut();
     };
-    let sys_queue = match MpscQueue::new() {
-        Some(q) => q,
-        None => {
-            unsafe { user_fast.drain_and_free() };
-            return ptr::null_mut();
-        }
+    let Some(sys_queue) = MpscQueue::new() else {
+        // SAFETY: user_fast was just successfully created and has no enqueued nodes yet.
+        unsafe { user_fast.drain_and_free() };
+        return ptr::null_mut();
     };
 
     let cap = if capacity == 0 {
@@ -494,16 +485,13 @@ pub unsafe extern "C" fn hew_mailbox_new_with_policy(
 /// Returned pointer must be freed with [`hew_mailbox_free`].
 #[no_mangle]
 pub unsafe extern "C" fn hew_mailbox_new_coalesce(capacity: u32) -> *mut HewMailbox {
-    let user_fast = match MpscQueue::new() {
-        Some(q) => q,
-        None => return ptr::null_mut(),
+    let Some(user_fast) = MpscQueue::new() else {
+        return ptr::null_mut();
     };
-    let sys_queue = match MpscQueue::new() {
-        Some(q) => q,
-        None => {
-            unsafe { user_fast.drain_and_free() };
-            return ptr::null_mut();
-        }
+    let Some(sys_queue) = MpscQueue::new() else {
+        // SAFETY: user_fast was just successfully created and has no enqueued nodes yet.
+        unsafe { user_fast.drain_and_free() };
+        return ptr::null_mut();
     };
 
     let cap = i64::from(capacity);

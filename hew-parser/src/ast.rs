@@ -554,9 +554,10 @@ pub struct WherePredicate {
 // ── Visibility ───────────────────────────────────────────────────────
 
 /// Item visibility level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Visibility {
     /// Not visible outside the defining module.
+    #[default]
     Private,
     /// Fully public.
     Pub,
@@ -564,12 +565,6 @@ pub enum Visibility {
     PubPackage,
     /// Visible to the parent module.
     PubSuper,
-}
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Self::Private
-    }
 }
 
 impl Visibility {
@@ -681,10 +676,6 @@ pub struct WireMetadata {
 
 /// Per-field wire protocol metadata (auto-assigned or explicit field numbers, modifiers).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "mirrors wire format field attributes"
-)]
 pub struct WireFieldMeta {
     pub field_name: String,
     pub field_number: u32,

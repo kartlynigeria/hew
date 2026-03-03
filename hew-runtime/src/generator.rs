@@ -307,6 +307,7 @@ pub unsafe extern "C" fn hew_gen_next(ctx: *mut HewGenCtx, out_size: *mut usize)
     // without touching the channels (avoids deadlock on re-call).
     if ctx_ref.done.load(Ordering::Acquire) {
         if !out_size.is_null() {
+            // SAFETY: out_size is non-null and valid per caller contract.
             unsafe { *out_size = 0 };
         }
         return ptr::null_mut();
@@ -337,8 +338,10 @@ pub unsafe extern "C" fn hew_gen_next(ctx: *mut HewGenCtx, out_size: *mut usize)
             if val.data.is_null() {
                 // Null-yield (not done): allocate a 1-byte buffer so the
                 // consumer sees a non-null pointer and doesn't stop early.
+                // SAFETY: requesting 1 byte from the system allocator.
                 let buf = unsafe { libc::malloc(1) };
                 if !buf.is_null() {
+                    // SAFETY: buf is non-null and points to at least 1 allocated byte.
                     unsafe { *buf.cast::<u8>() = 0 };
                 }
                 buf
@@ -378,7 +381,7 @@ pub unsafe extern "C" fn hew_gen_free(ctx: *mut HewGenCtx) {
 
         // Join the generator thread.
         if let Some(handle) = (*ctx).handle.take() {
-            if let Err(_) = handle.join() {
+            if handle.join().is_err() {
                 set_last_error("generator thread panicked during execution");
             }
         }

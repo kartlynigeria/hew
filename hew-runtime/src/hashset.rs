@@ -1,12 +1,7 @@
 //! Hew runtime: `hashset` module.
 //!
 //! Hash set implementation backed by `HashMap<T, ()>` with C ABI.
-//! Uses the existing HashMap infrastructure for storage.
-
-#![expect(
-    clippy::cast_sign_loss,
-    reason = "len casts usize→i64 which is lossless for realistic sizes"
-)]
+//! Uses the existing `HashMap` infrastructure for storage.
 
 use core::ffi::c_char;
 use core::ptr;
@@ -57,6 +52,10 @@ pub unsafe extern "C" fn hew_hashset_new() -> *mut HewHashSet {
 /// # Safety
 ///
 /// `set` must be a valid `HewHashSet` pointer.
+#[expect(
+    clippy::similar_names,
+    reason = "key_str and key_cstr are related but distinct"
+)]
 #[no_mangle]
 pub unsafe extern "C" fn hew_hashset_insert_int(set: *mut HewHashSet, value: i64) -> bool {
     // SAFETY: caller guarantees `set` is valid.
@@ -107,6 +106,10 @@ pub unsafe extern "C" fn hew_hashset_insert_string(
 /// # Safety
 ///
 /// `set` must be a valid `HewHashSet` pointer.
+#[expect(
+    clippy::similar_names,
+    reason = "key_str and key_cstr are related but distinct"
+)]
 #[no_mangle]
 pub unsafe extern "C" fn hew_hashset_contains_int(set: *mut HewHashSet, value: i64) -> bool {
     // SAFETY: caller guarantees `set` is valid.
@@ -146,6 +149,10 @@ pub unsafe extern "C" fn hew_hashset_contains_string(
 /// # Safety
 ///
 /// `set` must be a valid `HewHashSet` pointer.
+#[expect(
+    clippy::similar_names,
+    reason = "key_str and key_cstr are related but distinct"
+)]
 #[no_mangle]
 pub unsafe extern "C" fn hew_hashset_remove_int(set: *mut HewHashSet, value: i64) -> bool {
     // SAFETY: caller guarantees `set` is valid.

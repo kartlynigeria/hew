@@ -97,7 +97,7 @@ fn unescape_string(s: &str) -> String {
                     let hi = chars.next();
                     let lo = chars.next();
                     if let (Some(h), Some(l)) = (hi, lo) {
-                        if let Ok(byte) = u8::from_str_radix(&format!("{}{}", h, l), 16) {
+                        if let Ok(byte) = u8::from_str_radix(&format!("{h}{l}"), 16) {
                             out.push(byte as char);
                         } else {
                             out.push('\\');
@@ -135,6 +135,10 @@ fn unescape_string(s: &str) -> String {
 /// * `suffix_len` — bytes to strip from the end (1 for `"` or `` ` ``)
 /// * `expr_open` — the marker that opens an expression (`"{"` or `"${"`)
 /// * `span_start` — byte offset of the token in the original source
+#[expect(
+    clippy::too_many_lines,
+    reason = "top-level parser handles all statement types"
+)]
 fn parse_string_parts(
     raw: &str,
     prefix_len: usize,
@@ -165,7 +169,7 @@ fn parse_string_parts(
                 'x' if idx + 3 < chars.len() => {
                     let (_, h) = chars[idx + 2];
                     let (_, l) = chars[idx + 3];
-                    if let Ok(byte) = u8::from_str_radix(&format!("{}{}", h, l), 16) {
+                    if let Ok(byte) = u8::from_str_radix(&format!("{h}{l}"), 16) {
                         literal_buf.push(byte as char);
                     } else {
                         literal_buf.push('\\');
@@ -383,12 +387,9 @@ impl<'src> Parser<'src> {
     fn expect(&mut self, expected: &Token<'_>) -> Option<Span> {
         if let Some(tok) = self.peek() {
             if std::mem::discriminant(tok) == std::mem::discriminant(expected) {
-                let (_, span) = match self.advance() {
-                    Some(t) => t,
-                    None => {
-                        self.error(format!("unexpected end of input, expected {expected:?}"));
-                        return None;
-                    }
+                let Some((_, span)) = self.advance() else {
+                    self.error(format!("unexpected end of input, expected {expected:?}"));
+                    return None;
                 };
                 return Some(span);
             }
@@ -645,6 +646,10 @@ impl<'src> Parser<'src> {
         }
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "SavedPos is consumed to restore parser state"
+    )]
     fn restore_pos(&mut self, saved: SavedPos) {
         self.pos = saved.pos;
         self.errors.truncate(saved.error_count);
@@ -820,6 +825,7 @@ impl<'src> Parser<'src> {
 
     /// Parse a function declaration with optional `async`/`gen` modifiers.
     /// The current token must be `fn`, `async`, or `gen`.
+    #[expect(clippy::ref_option, reason = "avoids cloning option contents")]
     fn parse_fn_with_modifiers(
         &mut self,
         vis: Visibility,
@@ -888,7 +894,7 @@ impl<'src> Parser<'src> {
                 let vis = self.parse_visibility();
                 let is_pure = self.eat(&Token::Pure);
                 match self.peek() {
-                    Some(Token::Fn) | Some(Token::Async) | Some(Token::Gen) => {
+                    Some(Token::Fn | Token::Async | Token::Gen) => {
                         self.parse_fn_with_modifiers(vis, is_pure, attrs, &doc_comment)?
                     }
                     Some(Token::Struct) if attrs.iter().any(|a| a.name == "wire") => {
@@ -959,20 +965,16 @@ impl<'src> Parser<'src> {
                     }
                 }
             }
-            Some(Token::Fn) | Some(Token::Async) | Some(Token::Gen) => {
+            Some(Token::Fn | Token::Async | Token::Gen) => {
                 self.parse_fn_with_modifiers(Visibility::Private, false, attrs, &doc_comment)?
             }
             Some(Token::Pure) => {
                 self.advance();
-                match self.peek() {
-                    Some(Token::Fn) | Some(Token::Async) | Some(Token::Gen) => self
-                        .parse_fn_with_modifiers(Visibility::Private, true, attrs, &doc_comment)?,
-                    _ => {
-                        self.error(
-                            "'pure' can only be applied to function declarations".to_string(),
-                        );
-                        return None;
-                    }
+                if let Some(Token::Fn | Token::Async | Token::Gen) = self.peek() {
+                    self.parse_fn_with_modifiers(Visibility::Private, true, attrs, &doc_comment)?
+                } else {
+                    self.error("'pure' can only be applied to function declarations".to_string());
+                    return None;
                 }
             }
             Some(Token::Struct) if attrs.iter().any(|a| a.name == "wire") => {
@@ -1443,8 +1445,7 @@ impl<'src> Parser<'src> {
                 }
                 other => {
                     self.error(format!(
-                        "expected 'fn' or 'type' in impl body, found {:?}",
-                        other
+                        "expected 'fn' or 'type' in impl body, found {other:?}"
                     ));
                     self.advance(); // error recovery: skip the bad token
                 }
@@ -1589,10 +1590,8 @@ impl<'src> Parser<'src> {
                 self.expect(&Token::Colon)?;
                 let ty = self.parse_type()?;
                 // Skip optional `= expr` initializer
-                if self.eat(&Token::Equal) {
-                    if self.parse_expr().is_none() {
-                        self.error("expected expression for field initializer".to_string());
-                    }
+                if self.eat(&Token::Equal) && self.parse_expr().is_none() {
+                    self.error("expected expression for field initializer".to_string());
                 }
                 if !self.eat(&Token::Semicolon) && self.peek() == Some(&Token::Comma) {
                     self.error("use `;` instead of `,` to separate fields".to_string());
@@ -2042,6 +2041,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse `#[wire] struct Name { field: Type, ... }` into a `TypeDecl` with wire metadata.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "expression parsing handles all expression types"
+    )]
     fn parse_wire_struct(
         &mut self,
         attrs: &[Attribute],
@@ -2795,6 +2798,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse optional `<T, U: Trait>` type parameters after a name.
+    #[expect(
+        clippy::option_option,
+        reason = "None vs Some(None) vs Some(Some(v)) distinguishes absent, present-but-empty, and present-with-value"
+    )]
     fn parse_opt_type_params(&mut self) -> Option<Option<Vec<TypeParam>>> {
         if self.eat(&Token::Less) {
             Some(Some(self.parse_type_params()?))
@@ -2804,6 +2811,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse optional `-> Type` return type annotation.
+    #[expect(
+        clippy::option_option,
+        reason = "None vs Some(None) vs Some(Some(v)) distinguishes absent, present-but-empty, and present-with-value"
+    )]
     fn parse_opt_return_type(&mut self) -> Option<Option<Spanned<TypeExpr>>> {
         if self.eat(&Token::Arrow) {
             Some(Some(self.parse_type()?))
@@ -2813,6 +2824,10 @@ impl<'src> Parser<'src> {
     }
 
     /// Parse optional `where T: Trait` clause.
+    #[expect(
+        clippy::option_option,
+        reason = "None vs Some(None) vs Some(Some(v)) distinguishes absent, present-but-empty, and present-with-value"
+    )]
     fn parse_opt_where_clause(&mut self) -> Option<Option<WhereClause>> {
         if self.peek() == Some(&Token::Where) {
             self.advance();
@@ -3625,27 +3640,22 @@ impl<'src> Parser<'src> {
                 let mut values: Vec<u8> = Vec::new();
                 while self.peek() != Some(&Token::RightBracket) {
                     let elem_expr = self.parse_expr()?;
-                    match &elem_expr.0 {
-                        Expr::Literal(Literal::Integer { value, .. }) => {
-                            if *value < 0 || *value > 255 {
-                                self.error(format!(
-                                    "byte value {value} out of range (must be 0..255)"
-                                ));
-                                return None;
-                            }
-                            #[expect(
-                                clippy::cast_possible_truncation,
-                                clippy::cast_sign_loss,
-                                reason = "Checked to be 0..=255 above"
-                            )]
-                            values.push(*value as u8);
-                        }
-                        _ => {
-                            self.error(
-                                "byte array literal elements must be integer literals".to_string(),
-                            );
+                    if let Expr::Literal(Literal::Integer { value, .. }) = &elem_expr.0 {
+                        if *value < 0 || *value > 255 {
+                            self.error(format!("byte value {value} out of range (must be 0..255)"));
                             return None;
                         }
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            clippy::cast_sign_loss,
+                            reason = "Checked to be 0..=255 above"
+                        )]
+                        values.push(*value as u8);
+                    } else {
+                        self.error(
+                            "byte array literal elements must be integer literals".to_string(),
+                        );
+                        return None;
                     }
                     if !self.eat(&Token::Comma) {
                         break;
@@ -4151,8 +4161,8 @@ impl<'src> Parser<'src> {
                 Expr::Cooperate
             }
             // Contextual keywords that can be used as identifiers in expressions
-            tok if Self::contextual_keyword_name(&tok).is_some() => {
-                let name = Self::contextual_keyword_name(&tok).unwrap();
+            tok if Self::contextual_keyword_name(tok).is_some() => {
+                let name = Self::contextual_keyword_name(tok).unwrap();
                 self.advance();
                 Expr::Identifier(name.to_string())
             }
@@ -4360,9 +4370,7 @@ impl<'src> Parser<'src> {
                 ) =>
             {
                 self.advance(); // consume '-'
-                let Some((next, _)) = self.advance() else {
-                    return None;
-                };
+                let (next, _) = self.advance()?;
                 match next {
                     Token::Integer(s) => {
                         if let Ok((val, radix)) = parse_int_literal(s) {

@@ -570,6 +570,10 @@ fn module_id_from_file(source_dir: &Path, canonical_path: &Path) -> hew_parser::
     clippy::too_many_arguments,
     reason = "module graph construction needs all context"
 )]
+#[expect(
+    clippy::ptr_arg,
+    reason = "items are cloned into module graph, needs Vec"
+)]
 fn build_module_graph(
     source_file: &Path,
     items: &mut Vec<Spanned<Item>>,
@@ -745,7 +749,7 @@ fn flatten_import_items(program: &mut hew_parser::ast::Program) {
 )]
 fn resolve_file_imports(
     source_file: &Path,
-    items: &mut Vec<Spanned<Item>>,
+    items: &mut [Spanned<Item>],
     imported: &mut HashSet<PathBuf>,
     manifest_deps: Option<&[String]>,
     extra_pkg_path: Option<&Path>,
@@ -907,7 +911,7 @@ fn resolve_file_imports(
                 .ok()
                 .into_iter()
                 .flatten()
-                .filter_map(|e| e.ok())
+                .filter_map(std::result::Result::ok)
                 .map(|e| e.path())
                 .filter(|p| {
                     p.extension().and_then(|e| e.to_str()) == Some("hew") && *p != canonical
@@ -952,10 +956,10 @@ fn resolve_file_imports(
         // Check for duplicate pub names in multi-file modules.
         if !peer_files.is_empty() {
             if let Item::Import(decl) = &items[*idx].0 {
-                let module_str = if !decl.path.is_empty() {
-                    decl.path.join("::")
-                } else {
+                let module_str = if decl.path.is_empty() {
                     canonical.display().to_string()
+                } else {
+                    decl.path.join("::")
                 };
                 check_duplicate_pub_names(&import_items, &module_str);
             }

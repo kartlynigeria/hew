@@ -89,7 +89,7 @@ struct ChildEvent {
 pub type SupervisorInitFn = unsafe extern "C" fn() -> *mut HewSupervisor;
 
 /// Specification for a child supervisor so the parent can restart it.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "reserved for parent-child supervisor restart")]
 #[derive(Debug)]
 struct SupervisorChildSpec {
     init_fn: SupervisorInitFn,
@@ -309,10 +309,6 @@ fn record_restart(sup: &mut HewSupervisor) {
 /// # Safety
 ///
 /// `sup.parent` must be non-null and point to a valid `HewSupervisor`.
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "index_in_parent fits in u64 for any reasonable supervisor tree"
-)]
 fn escalate_to_parent(sup: &HewSupervisor) {
     // SAFETY: caller guarantees parent is valid.
     let parent = unsafe { &*sup.parent };
@@ -637,10 +633,6 @@ unsafe fn restart_with_budget_and_strategy(sup: &mut HewSupervisor, failed_index
 /// # Safety
 ///
 /// `sup` must be valid.
-#[expect(
-    clippy::too_many_lines,
-    reason = "restart strategies (one-for-one/all/rest) need inline logic"
-)]
 unsafe fn apply_restart(sup: &mut HewSupervisor, failed_index: usize, exit_state: c_int) {
     let spec = &mut sup.child_specs[failed_index];
 
@@ -681,8 +673,9 @@ unsafe fn apply_restart(sup: &mut HewSupervisor, failed_index: usize, exit_state
         sup.pending_restart_timers.fetch_add(1, Ordering::AcqRel);
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-            // SAFETY: stop waits for pending timers before dropping supervisor.
             let sup_ptr = sup_addr as *mut HewSupervisor;
+            // SAFETY: hew_supervisor_stop spin-waits on pending_restart_timers
+            // before freeing the supervisor, so sup_ptr is still valid here.
             unsafe {
                 let s = &mut *sup_ptr;
                 if !s.cancelled.load(Ordering::Acquire) && s.running.load(Ordering::Acquire) != 0 {

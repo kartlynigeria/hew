@@ -32,17 +32,13 @@ pub unsafe extern "C" fn hew_string_concat(a: *const c_char, b: *const c_char) -
     let la = unsafe { cstr_len(a) };
     // SAFETY: cstr_len handles null check internally; b is valid per contract.
     let lb = unsafe { cstr_len(b) };
-    let total = match la.checked_add(lb) {
-        Some(t) => t,
-        None => unsafe {
-            libc::abort();
-        },
+    let Some(total) = la.checked_add(lb) else {
+        // SAFETY: abort is always safe to call.
+        unsafe { libc::abort() };
     };
-    let alloc_size = match total.checked_add(1) {
-        Some(s) => s,
-        None => unsafe {
-            libc::abort();
-        },
+    let Some(alloc_size) = total.checked_add(1) else {
+        // SAFETY: abort is always safe to call.
+        unsafe { libc::abort() };
     };
     // SAFETY: Requesting alloc_size bytes from malloc.
     let result = unsafe { libc::malloc(alloc_size) }.cast::<u8>();
@@ -310,6 +306,10 @@ pub unsafe extern "C" fn hew_string_trim(s: *const c_char) -> *mut c_char {
 /// # Safety
 ///
 /// All three pointers must be valid NUL-terminated C strings (or null).
+#[expect(
+    clippy::similar_names,
+    reason = "count_times_nlen and count_times_olen are intentionally parallel"
+)]
 #[no_mangle]
 pub unsafe extern "C" fn hew_string_replace(
     s: *const c_char,
@@ -354,19 +354,21 @@ pub unsafe extern "C" fn hew_string_replace(
     }
 
     // Use checked arithmetic to prevent overflow
-    let count_times_nlen = match count.checked_mul(nlen) {
-        Some(v) => v,
-        None => unsafe { libc::abort() },
+    let Some(count_times_nlen) = count.checked_mul(nlen) else {
+        // SAFETY: abort is always safe to call.
+        unsafe { libc::abort() };
     };
-    let count_times_olen = match count.checked_mul(olen) {
-        Some(v) => v,
-        None => unsafe { libc::abort() },
+    let Some(count_times_olen) = count.checked_mul(olen) else {
+        // SAFETY: abort is always safe to call.
+        unsafe { libc::abort() };
     };
     let result_len = match slen.checked_add(count_times_nlen) {
         Some(v) => match v.checked_sub(count_times_olen) {
             Some(result) => result,
+            // SAFETY: abort is always safe to call.
             None => unsafe { libc::abort() },
         },
+        // SAFETY: abort is always safe to call.
         None => unsafe { libc::abort() },
     };
     // SAFETY: Allocating result_len + 1 bytes via malloc.
@@ -475,10 +477,8 @@ pub unsafe extern "C" fn hew_string_compare(a: *const c_char, b: *const c_char) 
     let cmp = unsafe { libc::strcmp(a, b) };
     if cmp < 0 {
         -1
-    } else if cmp > 0 {
-        1
     } else {
-        0
+        i32::from(cmp > 0)
     }
 }
 
@@ -534,6 +534,7 @@ pub unsafe extern "C" fn hew_string_split(
             // SAFETY: Allocating a substring via malloc_copy and pushing.
             let part = unsafe { malloc_cstring(s_bytes[start..start + pos].as_ptr(), pos) };
             if part.is_null() {
+                // SAFETY: abort is always safe to call.
                 unsafe {
                     libc::abort();
                 }
@@ -548,6 +549,7 @@ pub unsafe extern "C" fn hew_string_split(
             // SAFETY: Tail slice is within s_bytes bounds.
             let part = unsafe { malloc_cstring(s_bytes[start..].as_ptr(), tail_len) };
             if part.is_null() {
+                // SAFETY: abort is always safe to call.
                 unsafe {
                     libc::abort();
                 }
@@ -692,9 +694,9 @@ pub unsafe extern "C" fn hew_string_repeat(s: *const c_char, count: i32) -> *mut
     // SAFETY: s is a valid NUL-terminated C string per caller contract.
     let len = unsafe { cstr_len(s) };
     let n = count as usize;
-    let total = match len.checked_mul(n) {
-        Some(v) => v,
-        None => unsafe { libc::abort() },
+    let Some(total) = len.checked_mul(n) else {
+        // SAFETY: abort is always safe to call.
+        unsafe { libc::abort() };
     };
     // SAFETY: Allocating total+1 bytes.
     let result = unsafe { libc::malloc(total + 1) }.cast::<u8>();
