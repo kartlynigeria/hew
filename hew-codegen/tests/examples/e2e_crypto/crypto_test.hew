@@ -4,15 +4,12 @@ import std::encoding::hex;
 
 fn main() {
     // SHA-256 of empty input
-    let empty: bytes = bytes::new();
+    let empty = b"";
     let h = crypto.sha256(empty);
     println(h.len());
 
     // SHA-256 of "abc" should start with ba7816bf
-    let abc: bytes = bytes::new();
-    abc.push(97); // a
-    abc.push(98); // b
-    abc.push(99); // c
+    let abc = b"abc";
     let hash = crypto.sha256(abc);
     let prefix = hex.encode(hash);
     // Print first 8 hex chars (4 bytes)
@@ -26,19 +23,13 @@ fn main() {
     println(rand.len());
 
     // constant_time_eq: equal
-    let a: bytes = bytes::new();
-    a.push(1);
-    a.push(2);
-    let b: bytes = bytes::new();
-    b.push(1);
-    b.push(2);
+    let a = bytes [1, 2];
+    let b = bytes [1, 2];
     if crypto.constant_time_eq(a, b) {
         println("equal");
     }
     // constant_time_eq: not equal
-    let c: bytes = bytes::new();
-    c.push(1);
-    c.push(3);
+    let c = bytes [1, 3];
     if crypto.constant_time_eq(a, c) {
         println("equal");
     } else {

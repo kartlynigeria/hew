@@ -2,11 +2,7 @@ import std::encoding::hex;
 
 fn main() {
     // Encode known bytes
-    let data: bytes = bytes::new();
-    data.push(0xDE);
-    data.push(0xAD);
-    data.push(0xBE);
-    data.push(0xEF);
+    let data = bytes [0xDE, 0xAD, 0xBE, 0xEF];
     let s = hex.encode(data);
     println(s);
 
@@ -21,12 +17,11 @@ fn main() {
     println(back.get(3));
 
     // Empty encode
-    let empty: bytes = bytes::new();
+    let empty = b"";
     let es = hex.encode(empty);
     println(es);
 
     // Single byte
-    let one: bytes = bytes::new();
-    one.push(0xF);
+    let one = bytes [0x0F];
     println(hex.encode(one));
 }

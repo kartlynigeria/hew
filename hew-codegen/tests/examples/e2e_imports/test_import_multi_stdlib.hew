@@ -2,9 +2,7 @@ import std::string;
 import std::encoding::hex;
 
 fn main() {
-    let data: bytes = bytes::new();
-    data.push(0x48); // H
-    data.push(0x69); // i
+    let data = b"Hi";
     let encoded = hex.encode(data);
     println(f"hex: {encoded}");
     let n = string.from_int(42);
