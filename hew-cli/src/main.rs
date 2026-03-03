@@ -23,6 +23,7 @@ mod diagnostic;
 mod doc;
 mod eval;
 mod link;
+mod machine;
 mod manifest;
 mod test_runner;
 mod watch;
@@ -62,6 +63,7 @@ fn hew_main() {
         "test" => test_runner::cmd_test(&args[2..]),
         "watch" => watch::cmd_watch(&args[2..]),
         "wire" => wire::cmd_wire(&args[2..]),
+        "machine" => machine::cmd_machine(&args[2..]),
         "fmt" => cmd_fmt(&args[2..]),
         "init" => cmd_init(&args[2..]),
         "completions" => cmd_completions(&args[2..]),
@@ -598,6 +600,8 @@ Commands:
   test [file|dir] [options]       Run tests
   wire check <file.hew> --against <baseline.hew>
                                   Check wire schema compatibility
+  machine diagram <file.hew>     Generate Mermaid state diagram from machines
+  machine list <file.hew>        List all machines with states and events
   fmt <file.hew>... [--check]     Format source files in-place
   init [name]                     Scaffold a new project
   completions <shell>             Print shell completion script
