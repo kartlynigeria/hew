@@ -74,7 +74,7 @@ FetchContent_MakeAvailable(msgpack-cxx)
 # ── nlohmann/json (header-only, for --input-json debug mode) ─────────────────
 FetchContent_Declare(
   nlohmann_json
-  URL      https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+  URL      https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
   # Hash omitted — GitHub tarballs are regenerated and may vary
 )
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
