@@ -2656,7 +2656,7 @@ void MLIRGen::generateMachineDecl(const ast::MachineDecl &decl) {
           targetVal = hew::EnumConstructOp::create(
               builder, location, machineType, static_cast<int32_t>(ti->targetStateIdx),
               builder.getStringAttr(machineName), mlir::ValueRange{},
-              /*payload_positions=*/nullptr);
+              /*payload_positions=*/mlir::ArrayAttr{});
         }
 
         if (targetVal)
