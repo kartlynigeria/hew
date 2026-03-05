@@ -148,8 +148,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: hew-codegen/build
-          key: hew-codegen-build-${{ runner.os }}-${{ hashFiles('hew-codegen/**/*.cpp', 'hew-codegen/**/*.h', 'hew-codegen/**/CMakeLists.txt', 'hew-codegen/**/*.td') }}
-          restore-keys: hew-codegen-build-${{ runner.os }}-
+          key: hew-codegen-build-${{ runner.os }}-llvm${{ env.LLVM_VERSION }}-${{ hashFiles('hew-codegen/**/*.cpp', 'hew-codegen/**/*.h', 'hew-codegen/**/CMakeLists.txt', 'hew-codegen/**/*.td') }}
+          restore-keys: hew-codegen-build-${{ runner.os }}-llvm${{ env.LLVM_VERSION }}-
 
       - name: Build Rust runtime and frontend (release)
         run: cargo build -p hew-cli -p hew-runtime -p hew-serialize -p hew-lsp --release
