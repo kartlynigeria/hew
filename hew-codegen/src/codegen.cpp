@@ -23,12 +23,12 @@
 
 // MLIR conversion includes
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
-#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
@@ -4458,7 +4458,7 @@ int Codegen::emitObjectFile(llvm::Module &module, const std::string &path,
   module.setTargetTriple(targetTriple);
 
   std::string error;
-  auto *target = llvm::TargetRegistry::lookupTarget(targetTriple.str(), error);
+  auto *target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
   if (!target) {
     llvm::errs() << "Error: could not look up target: " << error << "\n";
     return 1;
@@ -4641,7 +4641,7 @@ int Codegen::compile(mlir::ModuleOp module, const CodegenOptions &opts) {
     llvm::Triple triple(opts.target_triple.empty() ? llvm::sys::getDefaultTargetTriple()
                                                    : opts.target_triple);
     std::string error;
-    auto *target = llvm::TargetRegistry::lookupTarget(triple.str(), error);
+    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
     if (target) {
       llvm::TargetOptions tOpts;
       auto tm = target->createTargetMachine(triple, "generic", "", tOpts, llvm::Reloc::PIC_);
