@@ -104,8 +104,8 @@ static ast::WireDecl wireMetadataToWireDecl(const ast::TypeDecl &td) {
 
 MLIRGen::MLIRGen(mlir::MLIRContext &context, const std::string &targetTriple,
                  const std::string &sourcePath, const std::vector<size_t> &lineMap)
-    : context(context), builder(&context), targetTriple(targetTriple),
-      currentLoc(builder.getUnknownLoc()), lineMap_(lineMap) {
+    : lineMap_(lineMap), context(context), builder(&context), targetTriple(targetTriple),
+      currentLoc(builder.getUnknownLoc()) {
   fileIdentifier = builder.getStringAttr(sourcePath.empty() ? "<unknown>" : sourcePath);
   isWasm32_ = targetTriple.find("wasm32") != std::string::npos;
   cachedSizeType_ = mlir::IntegerType::get(&context, isWasm32_ ? 32 : 64);
@@ -599,8 +599,8 @@ mlir::Value MLIRGen::coerceType(mlir::Value value, mlir::Type targetType, mlir::
       auto &cachedThunkName = closureThunkCache[funcName];
 
       // Look up the thunk and create a closure with null env
-      auto thunkFunc = module.lookupSymbol<mlir::func::FuncOp>(cachedThunkName);
-      assert(thunkFunc && "thunk must exist after cache insert");
+      assert(module.lookupSymbol<mlir::func::FuncOp>(cachedThunkName) &&
+             "thunk must exist after cache insert");
       auto fnPtrVal = hew::FuncPtrOp::create(builder, location, ptrType,
                                              mlir::SymbolRefAttr::get(&context, cachedThunkName));
       auto nullEnv = mlir::LLVM::ZeroOp::create(builder, location, ptrType);

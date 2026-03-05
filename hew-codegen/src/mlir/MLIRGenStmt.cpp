@@ -686,7 +686,7 @@ void MLIRGen::generateLetStmt(const ast::StmtLet &stmt) {
                          std::holds_alternative<ast::ExprCall>(vk);
           // Method calls that produce OWNED strings should be dropped.
           // .get() on Vec/HashMap now returns strdup'd owned copies.
-          if (auto *mc = std::get_if<ast::ExprMethodCall>(&vk)) {
+          if (std::get_if<ast::ExprMethodCall>(&vk)) {
             isStringExpr = true;
           }
         }

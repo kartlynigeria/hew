@@ -472,8 +472,9 @@ void MLIRGen::generateWireDecl(const ast::WireDecl &decl) {
     // Scratch slots for decode out-params
     auto scratchI64 = mlir::LLVM::AllocaOp::create(builder, location, ptrType, i64Type, one);
     auto scratchI32 = mlir::LLVM::AllocaOp::create(builder, location, ptrType, i32Type, one);
-    auto scratchPtr = mlir::LLVM::AllocaOp::create(builder, location, ptrType, ptrType, one);
-    auto scratchLen = mlir::LLVM::AllocaOp::create(builder, location, ptrType, i64Type, one);
+    // TODO: wire decode for ptr/len fields not yet implemented
+    // auto scratchPtr = mlir::LLVM::AllocaOp::create(builder, location, ptrType, ptrType, one);
+    // auto scratchLen = mlir::LLVM::AllocaOp::create(builder, location, ptrType, i64Type, one);
     auto scratchFieldNum = mlir::LLVM::AllocaOp::create(builder, location, ptrType, i32Type, one);
     auto scratchWireType = mlir::LLVM::AllocaOp::create(builder, location, ptrType, i32Type, one);
 

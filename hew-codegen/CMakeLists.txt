@@ -57,7 +57,11 @@ if(HEW_STATIC_LINK)
   message(STATUS "Static linking enabled — using individual LLVM/MLIR static libraries")
 endif()
 
-add_definitions(${LLVM_DEFINITIONS})
+# Note: HandleLLVMOptions (included above) already adds the necessary
+# compile definitions (_GLIBCXX_USE_CXX11_ABI, __STDC_*_MACROS, etc.).
+# Do NOT call add_definitions(${LLVM_DEFINITIONS}) — that string is
+# space-separated, not semicolon-separated, causing malformed -D flags
+# and duplicate macro redefinition warnings.
 
 # ── msgpack-cxx (header-only, for msgpack AST deserialization) ───────────────
 include(FetchContent)
