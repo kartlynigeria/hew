@@ -416,18 +416,18 @@ static bool test2_build_and_lower() {
   auto f64Type = builder.getF64Type();
 
   auto funcType = builder.getFunctionType({}, {});
-  auto funcOp = builder.create<mlir::func::FuncOp>(loc, "main", funcType);
+  auto funcOp = mlir::func::FuncOp::create(builder, loc, "main", funcType);
   module.push_back(funcOp);
 
   auto *entryBlock = funcOp.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
 
-  auto cst314 = builder.create<mlir::arith::ConstantOp>(loc, builder.getF64FloatAttr(3.14));
-  auto cst1 = builder.create<mlir::arith::ConstantOp>(loc, builder.getI32IntegerAttr(1));
-  auto sitofp = builder.create<mlir::arith::SIToFPOp>(loc, f64Type, cst1);
-  auto addf = builder.create<mlir::arith::AddFOp>(loc, cst314, sitofp);
+  auto cst314 = mlir::arith::ConstantOp::create(builder, loc, builder.getF64FloatAttr(3.14));
+  auto cst1 = mlir::arith::ConstantOp::create(builder, loc, builder.getI32IntegerAttr(1));
+  auto sitofp = mlir::arith::SIToFPOp::create(builder, loc, f64Type, cst1);
+  auto addf = mlir::arith::AddFOp::create(builder, loc, cst314, sitofp);
   (void)addf;
-  builder.create<mlir::func::ReturnOp>(loc);
+  mlir::func::ReturnOp::create(builder, loc);
 
   // Verify before passes
   if (mlir::failed(mlir::verify(module))) {
@@ -480,19 +480,22 @@ static bool test3_build_llvm_directly() {
 
   // Build llvm.func @main() directly
   auto funcType = mlir::LLVM::LLVMFunctionType::get(mlir::LLVM::LLVMVoidType::get(&context), {});
-  auto funcOp = builder.create<mlir::LLVM::LLVMFuncOp>(loc, "main", funcType);
+  auto funcOp = mlir::LLVM::LLVMFuncOp::create(builder, loc, "main", funcType);
   module.push_back(funcOp);
 
   auto *entryBlock = funcOp.addEntryBlock(builder);
   builder.setInsertionPointToStart(entryBlock);
 
-  auto cst314 = builder.create<mlir::LLVM::ConstantOp>(loc, f64Type, builder.getF64FloatAttr(3.14));
-  auto cst1i32 = builder.create<mlir::LLVM::ConstantOp>(loc, i32Type, builder.getI32IntegerAttr(1));
-  auto cst1f64 = builder.create<mlir::LLVM::ConstantOp>(loc, f64Type, builder.getF64FloatAttr(1.0));
-  auto fadd = builder.create<mlir::LLVM::FAddOp>(loc, f64Type, cst1f64, cst314);
+  auto cst314 =
+      mlir::LLVM::ConstantOp::create(builder, loc, f64Type, builder.getF64FloatAttr(3.14));
+  auto cst1i32 =
+      mlir::LLVM::ConstantOp::create(builder, loc, i32Type, builder.getI32IntegerAttr(1));
+  auto cst1f64 =
+      mlir::LLVM::ConstantOp::create(builder, loc, f64Type, builder.getF64FloatAttr(1.0));
+  auto fadd = mlir::LLVM::FAddOp::create(builder, loc, f64Type, cst1f64, cst314);
   (void)cst1i32;
   (void)fadd;
-  builder.create<mlir::LLVM::ReturnOp>(loc, mlir::ValueRange{});
+  mlir::LLVM::ReturnOp::create(builder, loc, mlir::ValueRange{});
 
   fprintf(stderr, "  Module:\n");
   module.dump();
@@ -513,15 +516,15 @@ static bool test4_reject_unreconciled_cast() {
 
   auto f64Type = builder.getF64Type();
   auto funcType = builder.getFunctionType({}, {f64Type});
-  auto funcOp = builder.create<mlir::func::FuncOp>(loc, "main", funcType);
+  auto funcOp = mlir::func::FuncOp::create(builder, loc, "main", funcType);
   module.push_back(funcOp);
 
   auto *entryBlock = funcOp.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
 
-  auto cst1 = builder.create<mlir::arith::ConstantIntOp>(loc, 1, 32);
-  auto badCast = builder.create<mlir::UnrealizedConversionCastOp>(loc, f64Type, cst1.getResult());
-  builder.create<mlir::func::ReturnOp>(loc, mlir::ValueRange{badCast.getResult(0)});
+  auto cst1 = mlir::arith::ConstantIntOp::create(builder, loc, 1, 32);
+  auto badCast = mlir::UnrealizedConversionCastOp::create(builder, loc, f64Type, cst1.getResult());
+  mlir::func::ReturnOp::create(builder, loc, mlir::ValueRange{badCast.getResult(0)});
 
   if (mlir::failed(mlir::verify(module))) {
     fprintf(stderr, "  FAILED: malformed test module\n");

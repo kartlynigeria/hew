@@ -15,7 +15,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ── Find LLVM & MLIR ────────────────────────────────────────────────────────
 # Auto-detected via CMake's standard search paths.  Override with:
 #   cmake -DLLVM_DIR=/path/to/llvm/lib/cmake/llvm -DMLIR_DIR=/path/to/mlir/lib/cmake/mlir
-find_package(LLVM 21.1 REQUIRED CONFIG)
+find_package(LLVM 22.1 REQUIRED CONFIG)
 find_package(MLIR REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -57,7 +57,11 @@ if(HEW_STATIC_LINK)
   message(STATUS "Static linking enabled — using individual LLVM/MLIR static libraries")
 endif()
 
-add_definitions(${LLVM_DEFINITIONS})
+# Note: HandleLLVMOptions (included above) already adds the necessary
+# compile definitions (_GLIBCXX_USE_CXX11_ABI, __STDC_*_MACROS, etc.).
+# Do NOT call add_definitions(${LLVM_DEFINITIONS}) — that string is
+# space-separated, not semicolon-separated, causing malformed -D flags
+# and duplicate macro redefinition warnings.
 
 # ── msgpack-cxx (header-only, for msgpack AST deserialization) ───────────────
 include(FetchContent)
