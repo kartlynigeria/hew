@@ -25,6 +25,11 @@
 - Timeout expression codegen support (`expr | after duration`)
 - Generic lambda syntax support (<T>(x: T) => expr)
 - Coroutine support for aarch64 (ARM64) architecture
+- String predicate methods: `.is_digit()`, `.is_alpha()`, `.is_alphanumeric()`, `.is_empty()`
+- `String.lines()` method: split string on newlines (strips `\r`) returning `Vec<String>`
+- `Vec<String>.join(sep)` method: join elements with separator string
+- `HashMap.keys()` method: return `Vec<K>` of all keys (type checker; codegen already existed)
+- `join` is now a contextual keyword, usable as a method name in dot-call position
 
 ### Fixed
 

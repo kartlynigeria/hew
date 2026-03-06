@@ -2276,6 +2276,20 @@ std::optional<mlir::Value> MLIRGen::generateBuiltinMethodCall(const ast::ExprMet
                       .getResult();
       return true;
     }
+    if (method == "join") {
+      auto sep = generateExpression(ast::callArgExpr(mc.args[0]).value);
+      if (!sep) {
+        resultOut = nullptr;
+        return true;
+      }
+      auto strType = hew::StringRefType::get(&context);
+      auto calleeAttr = mlir::SymbolRefAttr::get(&context, "hew_vec_join_str");
+      resultOut = builder
+                      .create<hew::RuntimeCallOp>(location, mlir::TypeRange{strType}, calleeAttr,
+                                                  mlir::ValueRange{vecValue, sep})
+                      .getResult();
+      return true;
+    }
     return false;
   };
 
@@ -2581,6 +2595,22 @@ std::optional<mlir::Value> MLIRGen::generateBuiltinMethodCall(const ast::ExprMet
     return hew::StringMethodOp::create(builder, location, hew::StringRefType::get(&context),
                                        builder.getStringAttr("split"), receiver,
                                        mlir::ValueRange{sep})
+        .getResult();
+  }
+  if (method == "lines") {
+    auto strType = hew::StringRefType::get(&context);
+    auto vecType = hew::VecType::get(&context, strType);
+    auto calleeAttr = mlir::SymbolRefAttr::get(&context, "hew_string_lines");
+    return builder
+        .create<hew::RuntimeCallOp>(location, mlir::TypeRange{vecType}, calleeAttr,
+                                    mlir::ValueRange{receiver})
+        .getResult();
+  }
+  if (method == "is_digit" || method == "is_alpha" || method == "is_alphanumeric" ||
+      method == "is_empty") {
+    return builder
+        .create<hew::StringMethodOp>(location, builder.getI1Type(), builder.getStringAttr(method),
+                                     receiver, mlir::ValueRange{})
         .getResult();
   }
   if (method == "contains") {

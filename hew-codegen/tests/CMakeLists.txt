@@ -358,6 +358,18 @@ add_e2e_file_test(empty_vec_literal  e2e_collections empty_vec_literal)
 add_e2e_file_test(empty_map_literal  e2e_collections empty_map_literal)
 add_e2e_file_test(map_literal        e2e_collections map_literal)
 
+# HashMap.keys() method — returns Vec<K>
+add_e2e_file_test(hashmap_keys_method  e2e_collections hashmap_keys_method)
+
+# Vec<String>.join(sep) — joins elements with separator
+add_e2e_file_test(vec_join             e2e_collections vec_join)
+
+# String.lines() — split on newlines
+add_e2e_file_test(string_lines         e2e_strings string_lines)
+
+# String.is_digit(), .is_alpha(), .is_alphanumeric(), .is_empty()
+add_e2e_file_test(string_predicates    e2e_strings string_predicates)
+
 # Compound assignment on indexed targets
 add_e2e_file_test(indexed_compound  e2e_compound_assign indexed_compound)
 
