@@ -607,6 +607,7 @@ impl<'src> Parser<'src> {
             Token::Event => Some("event"),
             Token::On => Some("on"),
             Token::When => Some("when"),
+            Token::Join => Some("join"),
             _ => None,
         }
     }

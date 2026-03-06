@@ -4885,6 +4885,32 @@ impl Checker {
                         }
                         Ty::Unit
                     }
+                    "join" => {
+                        if args.len() != 1 {
+                            self.report_error(
+                                TypeErrorKind::ArityMismatch,
+                                span,
+                                format!(
+                                    "`Vec::join` takes 1 argument but {} were supplied",
+                                    args.len()
+                                ),
+                            );
+                        }
+                        if let Some(arg) = args.first() {
+                            let (expr, sp) = arg.expr();
+                            self.check_against(expr, sp, &Ty::String);
+                        }
+                        if elem_ty != Ty::String {
+                            self.report_error(
+                                TypeErrorKind::UndefinedMethod,
+                                span,
+                                format!(
+                                    "`Vec::join` is only available on Vec<String>, not Vec<{elem_ty}>"
+                                ),
+                            );
+                        }
+                        Ty::String
+                    }
                     _ => {
                         self.report_error(
                             TypeErrorKind::UndefinedMethod,
@@ -4967,6 +4993,22 @@ impl Checker {
                         }
                         // Returns bool
                         Ty::Bool
+                    }
+                    "keys" => {
+                        if !args.is_empty() {
+                            self.report_error(
+                                TypeErrorKind::ArityMismatch,
+                                span,
+                                format!(
+                                    "`HashMap::keys` takes 0 arguments but {} were supplied",
+                                    args.len()
+                                ),
+                            );
+                        }
+                        Ty::Named {
+                            name: "Vec".to_string(),
+                            args: vec![key_ty],
+                        }
                     }
                     "values" => {
                         if !args.is_empty() {
@@ -5213,6 +5255,19 @@ impl Checker {
                     }
                     Ty::Bool
                 }
+                "is_digit" | "is_alpha" | "is_alphanumeric" | "is_empty" => {
+                    if !args.is_empty() {
+                        self.report_error(
+                            TypeErrorKind::ArityMismatch,
+                            span,
+                            format!(
+                                "`String::{method}` takes 0 arguments but {} were supplied",
+                                args.len()
+                            ),
+                        );
+                    }
+                    Ty::Bool
+                }
                 "to_uppercase" | "to_lowercase" | "to_upper" | "to_lower" | "trim" => Ty::String,
                 "replace" => {
                     if let Some(arg) = args.first() {
@@ -5229,6 +5284,22 @@ impl Checker {
                     if let Some(arg) = args.first() {
                         let (expr, sp) = arg.expr();
                         self.check_against(expr, sp, &Ty::String);
+                    }
+                    Ty::Named {
+                        name: "Vec".to_string(),
+                        args: vec![Ty::String],
+                    }
+                }
+                "lines" => {
+                    if !args.is_empty() {
+                        self.report_error(
+                            TypeErrorKind::ArityMismatch,
+                            span,
+                            format!(
+                                "`String::lines` takes 0 arguments but {} were supplied",
+                                args.len()
+                            ),
+                        );
                     }
                     Ty::Named {
                         name: "Vec".to_string(),

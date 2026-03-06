@@ -1930,6 +1930,11 @@ fn len(self) -> i32;
 fn repeat(self, n: i32) -> string;
 fn char_at(self, i: i32) -> string;
 fn index_of(self, sub: string) -> i32;      // Returns index or -1
+fn lines(self) -> Vec<string>;              // Split on newlines (strips \r)
+fn is_digit(self) -> bool;                  // All chars are ASCII digits
+fn is_alpha(self) -> bool;                  // All chars are ASCII alphabetic
+fn is_alphanumeric(self) -> bool;           // All chars are ASCII alphanumeric
+fn is_empty(self) -> bool;                  // Zero-length string
 
 // Built-in string functions (available in std::prelude)
 fn string_length(s: String) -> i32;
@@ -1961,9 +1966,12 @@ let parts = "a,b,c".split(",");            // Vec<string> ["a", "b", "c"]
 let replaced = s.replace("World", "Hew");  // "Hello, Hew!"
 let sub = s.slice(0, 5);                   // "Hello"
 let n = s.len();                           // 13
+let lines = "a\nb\nc".lines();             // Vec<string> ["a", "b", "c"]
+let is_num = "123".is_digit();             // true
+let is_abc = "hello".is_alpha();           // true
 ```
 
-Methods returning a yes/no answer (`contains`, `starts_with`, `ends_with`) return `bool`.
+Methods returning a yes/no answer (`contains`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_alphanumeric`, `is_empty`) return `bool`.
 
 **Vec:**
 
@@ -1983,6 +1991,7 @@ impl<T> Vec<T> {
     fn clone(self) -> Vec<T>;
     fn swap(self, a: usize, b: usize);
     fn sort(self) where T: Ord;
+    fn join(self, sep: string) -> string where T: string;  // Join Vec<String> with separator
 }
 ```
 
@@ -1999,6 +2008,10 @@ impl<K: Hash + Eq, V> HashMap<K, V> {
     fn get(self, key: K) -> Option<V>;
     fn remove(self, key: K) -> Option<V>;
     fn contains_key(self, key: K) -> bool;
+    fn keys(self) -> Vec<K>;
+    fn values(self) -> Vec<V>;
+    fn len(self) -> usize;
+    fn is_empty(self) -> bool;
 }
 ```
 

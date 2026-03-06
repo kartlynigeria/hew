@@ -149,6 +149,57 @@ pub unsafe extern "C" fn hew_string_contains(s: *const c_char, substr: *const c_
     !unsafe { libc::strstr(s, substr) }.is_null()
 }
 
+/// Check if all bytes in `s` are ASCII digits. Returns `false` for empty strings.
+///
+/// # Safety
+///
+/// `s` must be a valid NUL-terminated C string (or null).
+#[no_mangle]
+pub unsafe extern "C" fn hew_string_is_digit(s: *const c_char) -> bool {
+    cabi_guard!(s.is_null(), false);
+    // SAFETY: s is a valid NUL-terminated C string per caller contract.
+    let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+    !bytes.is_empty() && bytes.iter().all(|b| b.is_ascii_digit())
+}
+
+/// Check if all bytes in `s` are ASCII alphabetic. Returns `false` for empty strings.
+///
+/// # Safety
+///
+/// `s` must be a valid NUL-terminated C string (or null).
+#[no_mangle]
+pub unsafe extern "C" fn hew_string_is_alpha(s: *const c_char) -> bool {
+    cabi_guard!(s.is_null(), false);
+    // SAFETY: s is a valid NUL-terminated C string per caller contract.
+    let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+    !bytes.is_empty() && bytes.iter().all(|b| b.is_ascii_alphabetic())
+}
+
+/// Check if all bytes in `s` are ASCII alphanumeric. Returns `false` for empty strings.
+///
+/// # Safety
+///
+/// `s` must be a valid NUL-terminated C string (or null).
+#[no_mangle]
+pub unsafe extern "C" fn hew_string_is_alphanumeric(s: *const c_char) -> bool {
+    cabi_guard!(s.is_null(), false);
+    // SAFETY: s is a valid NUL-terminated C string per caller contract.
+    let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+    !bytes.is_empty() && bytes.iter().all(|b| b.is_ascii_alphanumeric())
+}
+
+/// Check if a string is empty (zero length).
+///
+/// # Safety
+///
+/// `s` must be a valid NUL-terminated C string (or null).
+#[no_mangle]
+pub unsafe extern "C" fn hew_string_is_empty(s: *const c_char) -> bool {
+    cabi_guard!(s.is_null(), true);
+    // SAFETY: s is a valid NUL-terminated C string per caller contract.
+    unsafe { *s == 0 }
+}
+
 /// Convert an `i32` to its decimal string representation. Caller must `free`.
 ///
 /// # Safety
@@ -562,6 +613,131 @@ pub unsafe extern "C" fn hew_string_split(
         }
     }
     v
+}
+
+/// Split a string into lines (on `\n`), stripping `\r`. Returns a `HewVec` of
+/// strings. Caller must free the returned vec with [`crate::vec::hew_vec_free`].
+///
+/// # Safety
+///
+/// `s` must be a valid NUL-terminated C string (or null).
+#[no_mangle]
+pub unsafe extern "C" fn hew_string_lines(s: *const c_char) -> *mut crate::vec::HewVec {
+    // SAFETY: hew_vec_new_str has no preconditions.
+    let v = unsafe { crate::vec::hew_vec_new_str() };
+    cabi_guard!(s.is_null(), v);
+    // SAFETY: s is a valid NUL-terminated C string per caller contract.
+    let s_bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+
+    let mut start = 0;
+    for i in 0..s_bytes.len() {
+        if s_bytes[i] == b'\n' {
+            let mut end = i;
+            if end > start && s_bytes[end - 1] == b'\r' {
+                end -= 1;
+            }
+            let len = end - start;
+            // SAFETY: Allocating a substring via malloc_copy and pushing.
+            let part = unsafe { malloc_cstring(s_bytes[start..end].as_ptr(), len) };
+            if part.is_null() {
+                // SAFETY: abort is always safe to call.
+                unsafe { libc::abort() };
+            }
+            // SAFETY: v is a valid HewVec and part is a valid C string.
+            unsafe { crate::vec::hew_vec_push_str(v, part) };
+            // SAFETY: part was allocated by malloc_copy.
+            unsafe { libc::free(part.cast()) };
+            start = i + 1;
+        }
+    }
+    // Push the last line (after the final \n, or the whole string if no \n)
+    let mut end = s_bytes.len();
+    if end > start && s_bytes[end - 1] == b'\r' {
+        end -= 1;
+    }
+    let len = end - start;
+    // SAFETY: Allocating a substring via malloc_copy and pushing.
+    let part = unsafe { malloc_cstring(s_bytes[start..end].as_ptr(), len) };
+    if part.is_null() {
+        // SAFETY: abort is always safe to call.
+        unsafe { libc::abort() };
+    }
+    // SAFETY: v is a valid HewVec and part is a valid C string.
+    unsafe { crate::vec::hew_vec_push_str(v, part) };
+    // SAFETY: part was allocated by malloc_copy.
+    unsafe { libc::free(part.cast()) };
+    v
+}
+
+/// Join a `Vec<String>` into a single string with `sep` between elements.
+/// Caller must `free` the result.
+///
+/// # Safety
+///
+/// `v` must be a valid `HewVec` of C strings. `sep` must be a valid NUL-terminated
+/// C string (or null, treated as empty separator).
+#[no_mangle]
+pub unsafe extern "C" fn hew_vec_join_str(
+    v: *mut crate::vec::HewVec,
+    sep: *const c_char,
+) -> *mut c_char {
+    // SAFETY: Allocating an empty string as fallback.
+    cabi_guard!(v.is_null(), unsafe { malloc_cstring(core::ptr::null(), 0) });
+    // SAFETY: v is a valid HewVec per caller contract.
+    let len = unsafe { crate::vec::hew_vec_len(v) };
+    if len == 0 {
+        // SAFETY: Allocating an empty string.
+        return unsafe { malloc_cstring(core::ptr::null(), 0) };
+    }
+    let sep_bytes = if sep.is_null() {
+        &[] as &[u8]
+    } else {
+        // SAFETY: sep is a valid NUL-terminated C string per caller contract.
+        unsafe { CStr::from_ptr(sep) }.to_bytes()
+    };
+
+    // Compute total length
+    let mut total: usize = 0;
+    for i in 0..len {
+        // SAFETY: i is within bounds per hew_vec_len contract.
+        let s = unsafe { crate::vec::hew_vec_get_str(v, i) };
+        if !s.is_null() {
+            // SAFETY: s is a valid NUL-terminated C string.
+            total += unsafe { CStr::from_ptr(s) }.to_bytes().len();
+        }
+        if i < len - 1 {
+            total += sep_bytes.len();
+        }
+    }
+
+    // SAFETY: Allocating total+1 bytes.
+    let buf = unsafe { libc::malloc(total + 1) }.cast::<u8>();
+    if buf.is_null() {
+        // SAFETY: abort is always safe to call.
+        unsafe { libc::abort() };
+    }
+    let mut offset = 0;
+    for i in 0..len {
+        // SAFETY: i is within bounds per hew_vec_len contract.
+        let s = unsafe { crate::vec::hew_vec_get_str(v, i) };
+        if !s.is_null() {
+            // SAFETY: s is a valid NUL-terminated C string.
+            let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
+            // SAFETY: offset + bytes.len() <= total.
+            unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), buf.add(offset), bytes.len()) };
+            offset += bytes.len();
+        }
+        if i < len - 1 {
+            // SAFETY: offset + sep_bytes.len() <= total.
+            unsafe {
+                core::ptr::copy_nonoverlapping(sep_bytes.as_ptr(), buf.add(offset), sep_bytes.len())
+            };
+            offset += sep_bytes.len();
+        }
+    }
+    // SAFETY: offset == total, NUL-terminate.
+    unsafe { *buf.add(total) = 0 };
+    buf.cast::<c_char>()
 }
 
 /// Convert a C string to ASCII lowercase. Caller must `free` the result.
